@@ -15,22 +15,22 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI argument parsing
-clap = { version = "=4.4.18", features = ["derive", "color"] }
+clap = { version = "=4.6.1", features = ["derive", "color"] }
 
 # HTTP client — sync, minimal dep tree, no edition2024 transitive deps
-minreq = { version = "=2.11.0", features = ["https", "json-using-serde"] }
+minreq = { version = "=2.14.1", features = ["https", "json-using-serde"] }
 
 # JSON deserialization
-serde = { version = "=1.0.197", features = ["derive"] }
-serde_json = "=1.0.115"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
 
 # Terminal output — colors, spinner (the table is rendered by hand in display.rs)
-owo-colors = { version = "=4.0.0", features = ["supports-colors"] }
-indicatif = "=0.17.8"
+owo-colors = { version = "=4.3.0", features = ["supports-colors"] }
+indicatif = "=0.18.4"
 anstream = "=1.0.0"
 
 # Error handling
-color-eyre = "=0.6.3"
+color-eyre = "=0.6.5"
 
 [profile.release]
 opt-level = 3
