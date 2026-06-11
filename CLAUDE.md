@@ -16,6 +16,10 @@ session starts with accurate, complete knowledge of the codebase.
   output, commit messages, `README.md`, `CLAUDE.md`, or any other file. Plain
   text only. (Functional Unicode glyphs already used in terminal output, such as
   the `✓` / `✗` / `⚠` status markers, are not decorative emoji and may stay.)
+- **Commit as the repository owner, never as Claude.** Author and commit every
+  change as the user's own git identity. Do not add Claude or Anthropic as an
+  author, committer, or `Co-Authored-By` trailer, and do not mention Claude or
+  any AI assistant in commit messages or PR descriptions.
 
 ---
 
