@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0 (2026-06-11)
+
+
+### Features
+
+* initial release of callrx ([e0bfc74](https://github.com/binarynoir/callrx/commit/e0bfc749bd1981d4787aa9e31c8131924780d98a))
+
 ## [0.1.1](https://github.com/binarynoir/callrx/compare/callrx-v0.1.0...callrx-v0.1.1) (2026-06-11)
 
 
