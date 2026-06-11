@@ -293,8 +293,6 @@ for the submission process.
 - [ ] `callrx search --name "John Smith"` — search by licensee name
 - [ ] `callrx batch <file>` — look up a list of callsigns from a file
 - [ ] `callrx history <callsign>` — show previous callsigns
-- [ ] JSON output to file: `callrx W1AW --json > w1aw.json`
-- [ ] Shell completions: `callrx --completions zsh`
 - [ ] Offline mode: cache recent lookups in `~/.cache/callrx/`
 - [ ] DXCC country detection from callsign prefix
 - [ ] QRZ.com XML API as a fallback source (requires account)

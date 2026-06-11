@@ -3,7 +3,8 @@ mod display;
 mod hyperlink;
 
 use anstream::{eprintln, println};
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use color_eyre::Result;
 
 /// callrx — Amateur radio callsign lookup (FCC ULS via callook.info)
@@ -36,6 +37,11 @@ enum Commands {
         #[command(flatten)]
         opts: OutputOpts,
     },
+    /// Print a shell completion script to stdout
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
+    },
 }
 
 /// Output options shared by the bare-callsign shorthand and the `lookup` subcommand.
@@ -63,12 +69,14 @@ fn main() -> Result<()> {
     match (cli.callsign, cli.command) {
         (Some(callsign), None) => run_lookup(&callsign, &cli.opts)?,
         (None, Some(Commands::Lookup { callsign, opts })) => run_lookup(&callsign, &opts)?,
+        (None, Some(Commands::Completions { shell })) => {
+            clap_complete::generate(shell, &mut Cli::command(), "callrx", &mut std::io::stdout());
+        }
         (Some(_), Some(_)) => {
             eprintln!("Error: provide either a callsign or a subcommand, not both.");
             std::process::exit(1);
         }
         (None, None) => {
-            use clap::CommandFactory;
             Cli::command().print_help()?;
             println!();
         }
