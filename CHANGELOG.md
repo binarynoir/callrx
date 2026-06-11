@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/binarynoir/callrx/compare/v0.1.1...v0.2.0) (2026-06-11)
+
+
+### Features
+
+* add Homebrew installation instructions and update funding model in documentation ([2dc381b](https://github.com/binarynoir/callrx/commit/2dc381b86f1e6b202a4f6c3d6ef0c0c1c269ecac))
+* add support badges for Buy Me a Coffee and Ko-fi in README ([e181d73](https://github.com/binarynoir/callrx/commit/e181d738488b500c65c76771f3b9cbe947cb9161))
+
 ## [0.1.1](https://github.com/binarynoir/callrx/compare/v0.1.0...v0.1.1) (2026-06-11)
 
 
