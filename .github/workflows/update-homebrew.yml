@@ -1,0 +1,139 @@
+name: Update Homebrew Tap
+
+# Regenerate the callrx formula in binarynoir/homebrew-callrx after a release,
+# pointing it at the new version's prebuilt binaries and their SHA256 sums.
+#
+# Called by release-please.yml once binaries are attached to the release, and
+# also runnable on demand for an existing tag from the Actions tab.
+#
+# Requires a repo secret HOMEBREW_TAP_TOKEN: a fine-grained PAT (or classic
+# token with `repo` scope) that can push to binarynoir/homebrew-callrx. The
+# default GITHUB_TOKEN cannot write to a different repository.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag whose binaries the formula should point at (e.g. v0.1.2)"
+        required: true
+        type: string
+    secrets:
+      tap_token:
+        description: "PAT that can push to the homebrew-callrx tap"
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to update the formula for (e.g. v0.1.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update-formula:
+    name: Update formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap
+        uses: actions/checkout@v5
+        with:
+          repository: binarynoir/homebrew-callrx
+          token: ${{ secrets.tap_token || secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Generate formula
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO: binarynoir/callrx
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+
+          # Fetch a published .sha256 sidecar and return just the hex digest.
+          sha_for() {
+            local asset="$1"
+            curl -fsSL "${BASE}/${asset}.sha256" | awk '{print $1}'
+          }
+
+          MAC_ARM="callrx-${TAG}-aarch64-apple-darwin.tar.gz"
+          MAC_X86="callrx-${TAG}-x86_64-apple-darwin.tar.gz"
+          LIN_ARM="callrx-${TAG}-aarch64-unknown-linux-gnu.tar.gz"
+          LIN_X86="callrx-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
+
+          SHA_MAC_ARM="$(sha_for "$MAC_ARM")"
+          SHA_MAC_X86="$(sha_for "$MAC_X86")"
+          SHA_LIN_ARM="$(sha_for "$LIN_ARM")"
+          SHA_LIN_X86="$(sha_for "$LIN_X86")"
+
+          mkdir -p tap/Formula
+          cat > tap/Formula/callrx.rb <<EOF
+          # typed: false
+          # frozen_string_literal: true
+
+          # Homebrew formula for callrx — beautiful amateur radio callsign lookup.
+          #
+          # This formula installs the prebuilt release binary for your platform, so it
+          # does not require a Rust toolchain. It is regenerated automatically on every
+          # release by the \`update-homebrew.yml\` workflow in binarynoir/callrx.
+          class Callrx < Formula
+            desc "Beautiful amateur radio callsign lookup for the terminal"
+            homepage "https://github.com/binarynoir/callrx"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "${BASE}/${MAC_ARM}"
+                sha256 "${SHA_MAC_ARM}"
+              end
+              on_intel do
+                url "${BASE}/${MAC_X86}"
+                sha256 "${SHA_MAC_X86}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${BASE}/${LIN_ARM}"
+                sha256 "${SHA_LIN_ARM}"
+              end
+              on_intel do
+                url "${BASE}/${LIN_X86}"
+                sha256 "${SHA_LIN_X86}"
+              end
+            end
+
+            def install
+              bin.install "callrx"
+            end
+
+            test do
+              assert_match "callrx #{version}", shell_output("#{bin}/callrx --version")
+            end
+          end
+          EOF
+
+          echo "Generated formula for ${VERSION}:"
+          cat tap/Formula/callrx.rb
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- Formula/callrx.rb; then
+            echo "Formula already up to date; nothing to commit."
+            exit 0
+          fi
+
+          git add Formula/callrx.rb
+          git commit -m "callrx ${TAG#v}"
+          git push

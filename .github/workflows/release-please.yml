@@ -37,3 +37,15 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
       attach_only: true
+
+  # ── Once the binaries are attached to the release, regenerate the formula in
+  #    the Homebrew tap so `brew upgrade callrx` picks up the new version. ──
+  update-homebrew:
+    name: Update Homebrew tap
+    needs: [release-please, build-binaries]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/update-homebrew.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets:
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
