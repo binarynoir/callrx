@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/binarynoir/callrx/compare/v0.5.0...v0.6.0) (2026-06-11)
+
+
+### Features
+
+* implement local caching with SQLite for callsign lookups ([e0416b3](https://github.com/binarynoir/callrx/commit/e0416b3c471c2d3de829e3419887ea2f0cf822d7))
+
 ## [0.5.0](https://github.com/binarynoir/callrx/compare/v0.4.0...v0.5.0) (2026-06-11)
 
 
