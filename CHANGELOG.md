@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/binarynoir/callrx/compare/v0.1.0...v0.1.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* update badge for latest release in README ([976dd52](https://github.com/binarynoir/callrx/commit/976dd524c1818247e77bac3ce46f5502d370d0f2))
+
 ## 0.1.0 (2026-06-11)
 
 
