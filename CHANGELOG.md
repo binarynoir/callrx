@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/binarynoir/callrx/compare/v0.4.0...v0.5.0) (2026-06-11)
+
+
+### Features
+
+* add shell completion support for callrx ([7db7977](https://github.com/binarynoir/callrx/commit/7db7977c723bf09be0d713b02e2990958cf367f4))
+
 ## [0.4.0](https://github.com/binarynoir/callrx/compare/v0.3.0...v0.4.0) (2026-06-11)
 
 ### Features
