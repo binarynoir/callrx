@@ -1,0 +1,154 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // ── Build ─────────────────────────────────────────────────────────────
+    {
+      "label": "cargo build",
+      "type": "shell",
+      "command": "cargo build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "cargo build --release",
+      "type": "shell",
+      "command": "cargo build --release",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+
+    // ── Test ──────────────────────────────────────────────────────────────
+    {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+
+    // ── Lint ──────────────────────────────────────────────────────────────
+    {
+      "label": "cargo clippy",
+      "type": "shell",
+      "command": "cargo clippy -- -W clippy::all -W clippy::pedantic",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+
+    // ── Format ────────────────────────────────────────────────────────────
+    {
+      "label": "cargo fmt",
+      "type": "shell",
+      "command": "cargo fmt",
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "cargo fmt --check",
+      "type": "shell",
+      "command": "cargo fmt --check",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // ── Run shortcuts ─────────────────────────────────────────────────────
+    {
+      "label": "run: callrx W1AW",
+      "type": "shell",
+      "command": "cargo run -- W1AW",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "run: callrx --help",
+      "type": "shell",
+      "command": "cargo run -- --help",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    },
+
+    // ── Check (fast, no codegen) ──────────────────────────────────────────
+    {
+      "label": "cargo check",
+      "type": "shell",
+      "command": "cargo check",
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": "$rustc"
+    },
+
+    // ── Clean ─────────────────────────────────────────────────────────────
+    {
+      "label": "cargo clean",
+      "type": "shell",
+      "command": "cargo clean",
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // ── Full CI check (fmt + clippy + test) ───────────────────────────────
+    {
+      "label": "ci: full check",
+      "type": "shell",
+      "command": "cargo fmt --check && cargo clippy -- -D warnings && cargo test",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "problemMatcher": "$rustc"
+    }
+  ]
+}
