@@ -16,6 +16,10 @@ callrx \- amateur radio callsign lookup via the FCC ULS database
 .B callrx
 .B \-\-version
 .br
+.B callrx history
+.I CALLSIGN
+.RI [ OPTIONS ]
+.br
 .B callrx completions
 .I SHELL
 .SH DESCRIPTION
@@ -40,6 +44,24 @@ Look up the given callsign and display the license record.
 The callsign is case-insensitive and is normalized to uppercase before the
 request is made.
 This is also the default action when a bare callsign is provided.
+.TP
+.B history \fICALLSIGN\fR
+Show every past lookup of the given callsign recorded in the local SQLite
+cache database, most recent first.
+Each entry shows the date and time (UTC), whether the data was fetched live
+from callook.info
+.RB ( live )
+or served from the local cache
+.RB ( cached ),
+and how long ago the lookup occurred.
+.PP
+This command reads from the
+.I lookup_history
+table, which is populated by every
+.BR "callrx lookup"
+invocation (including cache hits).
+Output is empty if no history exists for the callsign or if the cache
+database is unavailable.
 .TP
 .B completions \fISHELL\fR
 Print a shell completion script for the given shell to stdout and exit.
@@ -82,6 +104,13 @@ auto-detects link support via
 and related environment variables.
 This flag forces plain-text URLs regardless of terminal capabilities.
 .TP
+.B \-\-raw
+.RI ( history
+subcommand)
+Print plain-text history output with no ANSI color codes.
+Each entry is printed on its own line as
+.IR "DATE TIME  SOURCE  AGE" .
+.TP
 .B \-\-no\-cache
 Bypass the local cache and always fetch fresh data from callook.info.
 The fresh result is still written to the cache so subsequent lookups
@@ -114,6 +143,12 @@ Extract the operator class with jq:
 .TP
 Disable clickable links in the output:
 .B callrx W1AW \-\-no\-links
+.TP
+Show lookup history for a callsign:
+.B callrx history W1AW
+.TP
+Show history as plain text (for scripts):
+.B callrx history W1AW \-\-raw
 .TP
 Install zsh completions:
 .B callrx completions zsh > ~/.zsh/completions/_callrx

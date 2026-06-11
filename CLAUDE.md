@@ -291,7 +291,6 @@ for the submission process.
 ## Future ideas / roadmap
 
 - [ ] `callrx batch <file>` — look up a list of callsigns from a file
-- [ ] `callrx history <callsign>` — show previous callsigns (DB ready: `lookup_history` table)
 - [ ] DXCC country detection from callsign prefix
 - [ ] QRZ.com XML API as a fallback source (requires account)
 

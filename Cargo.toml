@@ -37,6 +37,9 @@ color-eyre = "=0.6.5"
 rusqlite = { version = "0.40", features = ["bundled"] }
 dirs = "6"
 
+# .env file loading — used in debug builds only to redirect cache to target/cache/
+dotenvy = "0.15"
+
 [profile.release]
 opt-level = 3
 lto = true

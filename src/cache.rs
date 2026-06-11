@@ -20,6 +20,11 @@ fn now_secs() -> u64 {
 }
 
 pub fn db_path() -> Option<PathBuf> {
+    // CALLRX_CACHE_DIR overrides the default system cache directory.
+    // Set via .env (loaded in debug builds) to redirect to target/cache/ during dev.
+    if let Ok(dir) = std::env::var("CALLRX_CACHE_DIR") {
+        return Some(PathBuf::from(dir).join("callrx.db"));
+    }
     dirs::cache_dir().map(|d| d.join("callrx").join("callrx.db"))
 }
 
@@ -255,6 +260,26 @@ pub fn record_lookup(conn: &Connection, callsign: &str, source: &str) -> Result<
         params![callsign, now_secs() as i64, source],
     )?;
     Ok(())
+}
+
+/// Returns all lookup events for `callsign`, most recent first.
+/// Each entry is `(looked_up_at_unix_secs, source)`.
+pub fn get_history(conn: &Connection, callsign: &str) -> Vec<(u64, String)> {
+    let mut stmt = match conn.prepare(
+        "SELECT looked_up_at, source FROM lookup_history
+         WHERE callsign = ?1 ORDER BY looked_up_at DESC",
+    ) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+
+    stmt.query_map(params![callsign], |row| {
+        let ts: i64 = row.get(0)?;
+        let source: String = row.get(1)?;
+        Ok((ts as u64, source))
+    })
+    .map(|rows| rows.filter_map(|r| r.ok()).collect())
+    .unwrap_or_default()
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -543,5 +568,79 @@ mod tests {
                 .collect()
         };
         assert_eq!(sources, vec!["api", "cache"]);
+    }
+
+    #[test]
+    fn get_history_returns_empty_when_no_entries() {
+        use super::get_history;
+        let conn = make_conn();
+        assert!(get_history(&conn, "W1AW").is_empty());
+    }
+
+    #[test]
+    fn get_history_returns_events_newest_first() {
+        use super::get_history;
+        let conn = make_conn();
+
+        // Insert with explicit timestamps so order is deterministic.
+        conn.execute(
+            "INSERT INTO lookup_history (callsign, looked_up_at, source) VALUES ('W1AW', 1000, 'api')",
+            rusqlite::params![],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO lookup_history (callsign, looked_up_at, source) VALUES ('W1AW', 3000, 'cache')",
+            rusqlite::params![],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO lookup_history (callsign, looked_up_at, source) VALUES ('W1AW', 2000, 'api')",
+            rusqlite::params![],
+        )
+        .unwrap();
+
+        let events = get_history(&conn, "W1AW");
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].0, 3000); // newest first
+        assert_eq!(events[1].0, 2000);
+        assert_eq!(events[2].0, 1000);
+    }
+
+    #[test]
+    fn get_history_filters_by_callsign() {
+        use super::get_history;
+        let conn = make_conn();
+
+        record_lookup(&conn, "W1AW", "api").unwrap();
+        record_lookup(&conn, "KD9ABC", "api").unwrap();
+        record_lookup(&conn, "W1AW", "cache").unwrap();
+
+        let w1aw = get_history(&conn, "W1AW");
+        assert_eq!(w1aw.len(), 2);
+        assert!(w1aw.iter().all(|(_, src)| src == "api" || src == "cache"));
+
+        let kd9abc = get_history(&conn, "KD9ABC");
+        assert_eq!(kd9abc.len(), 1);
+    }
+
+    #[test]
+    fn get_history_returns_correct_source_values() {
+        use super::get_history;
+        let conn = make_conn();
+
+        conn.execute(
+            "INSERT INTO lookup_history (callsign, looked_up_at, source) VALUES ('W1AW', 1000, 'api')",
+            rusqlite::params![],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO lookup_history (callsign, looked_up_at, source) VALUES ('W1AW', 2000, 'cache')",
+            rusqlite::params![],
+        )
+        .unwrap();
+
+        let events = get_history(&conn, "W1AW");
+        assert_eq!(events[0].1, "cache"); // newest first
+        assert_eq!(events[1].1, "api");
     }
 }

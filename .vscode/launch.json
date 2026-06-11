@@ -12,7 +12,8 @@
       "preLaunchTask": "cargo build",
       "env": {
         "RUST_BACKTRACE": "1",
-        "RUST_LOG": "debug"
+        "RUST_LOG": "debug",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
       }
     },
 
@@ -26,7 +27,8 @@
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build",
       "env": {
-        "RUST_BACKTRACE": "1"
+        "RUST_BACKTRACE": "1",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
       }
     },
 
@@ -40,7 +42,8 @@
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build",
       "env": {
-        "RUST_BACKTRACE": "1"
+        "RUST_BACKTRACE": "1",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
       }
     },
 
@@ -54,7 +57,8 @@
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build",
       "env": {
-        "RUST_BACKTRACE": "1"
+        "RUST_BACKTRACE": "1",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
       }
     },
 
@@ -68,7 +72,23 @@
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "cargo build",
       "env": {
-        "RUST_BACKTRACE": "1"
+        "RUST_BACKTRACE": "1",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
+      }
+    },
+
+    // ── History ───────────────────────────────────────────────────────────
+    {
+      "name": "▶ callrx history W1AW",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["history", "W1AW"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1",
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
       }
     },
 
@@ -80,7 +100,10 @@
       "program": "${workspaceFolder}/target/debug/callrx",
       "args": ["--help"],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "cargo build"
+      "preLaunchTask": "cargo build",
+      "env": {
+        "CALLRX_CACHE_DIR": "${workspaceFolder}/target/cache"
+      }
     }
   ],
 

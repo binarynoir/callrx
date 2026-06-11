@@ -81,6 +81,7 @@ Requires [Rust](https://rustup.rs) (stable toolchain, 1.75+).
 ```txt
 callrx [CALLSIGN]
 callrx lookup <CALLSIGN> [OPTIONS]
+callrx history <CALLSIGN> [--raw]
 callrx completions <SHELL>
 
 OPTIONS:
@@ -103,6 +104,8 @@ callrx lookup W1AW --json      # Raw JSON (pipe to jq)
 callrx lookup W1AW --raw       # Plain text (pipe to grep)
 callrx lookup W1AW --no-cache  # Force a fresh API fetch
 callrx lookup W1AW | grep Grid # Colors stripped when piped
+callrx history W1AW            # Show all past lookups of W1AW
+callrx history W1AW --raw      # History as plain text (for scripts)
 ```
 
 ### Local cache
@@ -114,14 +117,36 @@ note in the output.
 
 The cache database lives at:
 
-| Platform | Path                                  |
-| -------- | ------------------------------------- |
-| macOS    | `~/Library/Caches/callrx/callrx.db`   |
-| Linux    | `~/.cache/callrx/callrx.db`           |
-| Windows  | `%LOCALAPPDATA%\callrx\callrx.db`     |
+| Platform | Path                                |
+| -------- | ----------------------------------- |
+| macOS    | `~/Library/Caches/callrx/callrx.db` |
+| Linux    | `~/.cache/callrx/callrx.db`         |
+| Windows  | `%LOCALAPPDATA%\callrx\callrx.db`   |
 
 Use `--no-cache` to force a fresh fetch. The fresh result is still written
 back to the cache so the next lookup benefits from it.
+
+### Lookup history
+
+Every successful lookup — whether served from the cache or fetched live — is
+recorded in the local SQLite database. Use `callrx history <CALLSIGN>` to see
+when a callsign was last looked up:
+
+```bash
+callrx history W1AW
+```
+
+```txt
+W1AW · 3 lookups
+
+  2026-06-11 10:30   live     just now
+  2026-06-10 09:15   cached   1 day ago
+  2026-06-09 14:22   live     2 days ago
+```
+
+`live` means the data was fetched fresh from callook.info; `cached` means it
+was served from the local cache. Use `--raw` for plain text output suitable
+for scripting.
 
 ### Shell completions
 
