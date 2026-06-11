@@ -40,7 +40,23 @@ OSC 8-capable terminals.
 
 ## Installation
 
-### Download a binary (recommended)
+### Homebrew (macOS / Linux)
+
+```bash
+brew install binarynoir/callrx/callrx
+```
+
+Or tap first, then install:
+
+```bash
+brew tap binarynoir/callrx
+brew install callrx
+```
+
+Upgrade later with `brew upgrade callrx`. The formula installs the prebuilt
+release binary for your platform — no Rust toolchain required.
+
+### Download a binary
 
 Grab the latest binary for your platform from the [Releases page](https://github.com/binarynoir/callrx/releases):
 
@@ -183,7 +199,9 @@ and driven by [Conventional Commits](https://www.conventionalcommits.org/) — y
    `Cargo.lock` and updates `CHANGELOG.md`. Review and merge it when you're ready
    to ship.
 3. On merge it creates the `vX.Y.Z` tag and a GitHub Release (notes from the
-   changelog), then builds binaries for all platforms and attaches them.
+   changelog), builds binaries for all platforms and attaches them, then
+   regenerates the [Homebrew tap](https://github.com/binarynoir/homebrew-callrx)
+   formula so `brew upgrade callrx` picks up the new version.
 
 **Build targets:** macOS (Apple Silicon + Intel), Linux (x86_64, ARM64, ARMv7),
 and Windows x86_64.
@@ -192,9 +210,14 @@ and Windows x86_64.
 **Actions** tab ("Run workflow" → enter an existing tag), or triggered by pushing
 a `v*` tag directly.
 
-> **One-time setup:** in **Settings → Actions → General**, enable _"Allow GitHub
-> Actions to create and approve pull requests"_ so release-please can open the
-> Release PR.
+> **One-time setup:**
+>
+> - In **Settings → Actions → General**, enable _"Allow GitHub Actions to create
+>   and approve pull requests"_ so release-please can open the Release PR.
+> - Add a `HOMEBREW_TAP_TOKEN` repo secret: a fine-grained PAT (or classic token
+>   with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
+>   `update-homebrew.yml` workflow uses it to commit the regenerated formula to
+>   the tap. The default `GITHUB_TOKEN` cannot write to another repository.
 
 ---
 

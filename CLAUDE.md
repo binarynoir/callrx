@@ -63,8 +63,10 @@ callrx/
 │   ├── launch.json      — debug configs (lldb), includes prompt for callsign
 │   └── tasks.json       — build, test, lint, fmt, run shortcuts
 ├── .github/
-│   ├── workflows/ci.yml      — PR/push checks: fmt + clippy + test × 3 OSes
-│   └── workflows/release.yml — tag-triggered cross-platform binary release
+│   ├── workflows/ci.yml              — PR/push checks: fmt + clippy + test × 3 OSes
+│   ├── workflows/release.yml         — tag-triggered cross-platform binary release
+│   ├── workflows/release-please.yml  — release PR + tag; invokes release & tap update
+│   └── workflows/update-homebrew.yml — regenerates the Homebrew tap formula on release
 ├── Cargo.toml
 ├── Cargo.lock           — committed (this is a binary, not a library)
 ├── rust-toolchain.toml  — pins stable channel + rustfmt + clippy + rust-src
@@ -211,6 +213,8 @@ the version in `Cargo.toml` by hand.
 3. On merge, release-please creates the `vX.Y.Z` tag and a GitHub Release with
    notes from the changelog, then calls `release.yml` (via `workflow_call`) to
    build binaries for all platforms and attach them to that release.
+4. After the binaries are attached, `update-homebrew.yml` regenerates the
+   formula in the Homebrew tap (see below) so `brew upgrade callrx` works.
 
 State lives in `release-please-config.json` and `.release-please-manifest.json`.
 
@@ -231,6 +235,33 @@ guard). Invoking `release.yml` directly via `workflow_call` avoids needing a PAT
 - `aarch64-unknown-linux-gnu` — Linux ARM64 (cross)
 - `armv7-unknown-linux-gnueabihf` — Linux ARMv7 (cross)
 - `x86_64-pc-windows-msvc` — Windows x86_64
+
+---
+
+## Homebrew distribution
+
+`callrx` is installable via Homebrew from the
+[`binarynoir/homebrew-callrx`](https://github.com/binarynoir/homebrew-callrx)
+tap: `brew install binarynoir/callrx/callrx`.
+
+- **Formula type:** the formula installs the **prebuilt release binary** for the
+  user's platform (no Rust toolchain needed). It uses `on_macos` / `on_linux`
+  with nested `on_arm` / `on_intel` blocks, one `url` + `sha256` per arch,
+  pointing at the GitHub release `.tar.gz` assets. Supported arches: macOS
+  (Apple Silicon, Intel) and Linux (x86_64, ARM64). Windows is not distributed
+  via Homebrew.
+- **Automation:** `update-homebrew.yml` regenerates `Formula/callrx.rb` after
+  each release. It reads the version from the tag, pulls each platform's SHA256
+  from the published `.tar.gz.sha256` sidecar assets, writes the formula, and
+  commits it to the tap. `release-please.yml` calls it once binaries are
+  attached; it can also be run manually from the Actions tab for an existing tag.
+- **Required secret:** `HOMEBREW_TAP_TOKEN` — a fine-grained PAT (or classic
+  token with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
+  default `GITHUB_TOKEN` cannot write to another repo, so this is mandatory for
+  the automation to push the updated formula.
+- **Do not hand-edit** `Formula/callrx.rb`; it is overwritten on every release.
+  If the release asset naming or target list changes, update the heredoc
+  template inside `update-homebrew.yml` to match.
 
 ---
 
