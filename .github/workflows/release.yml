@@ -119,10 +119,11 @@ jobs:
           RELEASE_DIR="target/${TARGET}/release"
           ARCHIVE_NAME="${BIN_NAME}-${{ inputs.tag || github.ref_name }}-${TARGET}.tar.gz"
 
-          # Include README, LICENSE, and the binary
+          # Include the binary (from the release dir) plus README and LICENSE
+          # (from the repo root). Each -C only affects the files that follow it.
           tar -czf "${ARCHIVE_NAME}" \
             -C "${RELEASE_DIR}" "${BIN_NAME}" \
-            README.md LICENSE
+            -C "${GITHUB_WORKSPACE}" README.md LICENSE
 
           echo "ASSET=${ARCHIVE_NAME}" >> "$GITHUB_ENV"
 
