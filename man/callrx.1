@@ -15,6 +15,9 @@ callrx \- amateur radio callsign lookup via the FCC ULS database
 .br
 .B callrx
 .B \-\-version
+.br
+.B callrx completions
+.I SHELL
 .SH DESCRIPTION
 .B callrx
 is a command-line tool for looking up FCC Universal Licensing System (ULS)
@@ -37,6 +40,14 @@ Look up the given callsign and display the license record.
 The callsign is case-insensitive and is normalized to uppercase before the
 request is made.
 This is also the default action when a bare callsign is provided.
+.TP
+.B completions \fISHELL\fR
+Print a shell completion script for the given shell to stdout and exit.
+.I SHELL
+must be one of:
+.BR bash ", " zsh ", " fish ", " elvish ", " powershell .
+Source the output to enable tab completion for
+.BR callrx .
 .SH OPTIONS
 The following options apply to both the bare-callsign form and the
 .B lookup
@@ -95,6 +106,12 @@ Extract the operator class with jq:
 .TP
 Disable clickable links in the output:
 .B callrx W1AW \-\-no\-links
+.TP
+Install zsh completions:
+.B callrx completions zsh > ~/.zsh/completions/_callrx
+.TP
+Install bash completions (current session):
+.B eval "$(callrx completions bash)"
 .SH EXIT STATUS
 .TP
 .B 0

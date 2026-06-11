@@ -81,6 +81,7 @@ Requires [Rust](https://rustup.rs) (stable toolchain, 1.75+).
 ```txt
 callrx [CALLSIGN]
 callrx lookup <CALLSIGN> [OPTIONS]
+callrx completions <SHELL>
 
 OPTIONS:
     --json       Output raw JSON from callook.info
@@ -88,6 +89,8 @@ OPTIONS:
     --no-links   Disable clickable hyperlinks
     --help       Print help
     --version    Print version
+
+SHELLS: bash, zsh, fish, elvish, powershell
 ```
 
 **Examples:**
@@ -98,6 +101,38 @@ callrx lookup KD9ABC           # Via subcommand
 callrx lookup W1AW --json      # Raw JSON (pipe to jq)
 callrx lookup W1AW --raw       # Plain text (pipe to grep)
 callrx lookup W1AW | grep Grid # Colors stripped when piped
+```
+
+### Shell completions
+
+Generate and install a completion script for your shell:
+
+**zsh:**
+
+```zsh
+callrx completions zsh > ~/.zsh/completions/_callrx
+# Ensure ~/.zsh/completions is in your $fpath (add to ~/.zshrc if needed):
+# fpath=(~/.zsh/completions $fpath)
+# autoload -Uz compinit && compinit
+```
+
+**bash:**
+
+```bash
+# Add to ~/.bashrc to load on every session:
+eval "$(callrx completions bash)"
+```
+
+**fish:**
+
+```fish
+callrx completions fish > ~/.config/fish/completions/callrx.fish
+```
+
+**PowerShell:**
+
+```powershell
+callrx completions powershell >> $PROFILE
 ```
 
 ---

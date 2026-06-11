@@ -110,6 +110,7 @@ jobs:
             def install
               bin.install "callrx"
               man1.install "man/callrx.1"
+              generate_completions_from_executable(bin/"callrx", "completions")
             end
 
             def caveats
