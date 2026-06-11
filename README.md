@@ -87,6 +87,7 @@ OPTIONS:
     --json       Output raw JSON from callook.info
     --raw        Plain text output (no color, no formatting)
     --no-links   Disable clickable hyperlinks
+    --no-cache   Bypass the local cache; always fetch fresh data
     --help       Print help
     --version    Print version
 
@@ -96,12 +97,31 @@ SHELLS: bash, zsh, fish, elvish, powershell
 **Examples:**
 
 ```bash
-callrx W1AW                    # Quick lookup
+callrx W1AW                    # Quick lookup (served from cache if fresh)
 callrx lookup KD9ABC           # Via subcommand
 callrx lookup W1AW --json      # Raw JSON (pipe to jq)
 callrx lookup W1AW --raw       # Plain text (pipe to grep)
+callrx lookup W1AW --no-cache  # Force a fresh API fetch
 callrx lookup W1AW | grep Grid # Colors stripped when piped
 ```
+
+### Local cache
+
+`callrx` caches every successful lookup in a local SQLite database for 7 days
+(matching callook.info's weekly FCC sync schedule). Subsequent lookups for the
+same callsign are served instantly from the cache and show a "Cached X ago"
+note in the output.
+
+The cache database lives at:
+
+| Platform | Path                                  |
+| -------- | ------------------------------------- |
+| macOS    | `~/Library/Caches/callrx/callrx.db`   |
+| Linux    | `~/.cache/callrx/callrx.db`           |
+| Windows  | `%LOCALAPPDATA%\callrx\callrx.db`     |
+
+Use `--no-cache` to force a fresh fetch. The fresh result is still written
+back to the cache so the next lookup benefits from it.
 
 ### Shell completions
 

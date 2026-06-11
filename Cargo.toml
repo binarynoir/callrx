@@ -33,6 +33,10 @@ anstream = "=1.0.0"
 # Error handling
 color-eyre = "=0.6.5"
 
+# Local cache (SQLite) + XDG cache directory
+rusqlite = { version = "0.40", features = ["bundled"] }
+dirs = "6"
+
 [profile.release]
 opt-level = 3
 lto = true

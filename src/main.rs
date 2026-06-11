@@ -1,4 +1,5 @@
 mod api;
+mod cache;
 mod display;
 mod hyperlink;
 
@@ -58,6 +59,11 @@ struct OutputOpts {
     /// Disable clickable hyperlinks (useful when piping output)
     #[arg(long)]
     no_links: bool,
+
+    /// Bypass the local cache and fetch fresh data from callook.info.
+    /// The result is still written to the cache for future lookups.
+    #[arg(long)]
+    no_cache: bool,
 }
 
 fn main() -> Result<()> {
@@ -88,27 +94,50 @@ fn main() -> Result<()> {
 fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
     let callsign = callsign.to_uppercase();
 
-    // Show a spinner while fetching
-    let spinner = display::make_spinner(&format!("Looking up {callsign}…"));
+    // Cache is always opened for writing; --no-cache only bypasses the read.
+    let cache_conn = cache::open().ok();
 
-    let result = api::lookup_callsign(&callsign);
+    let cached = if opts.no_cache {
+        None
+    } else {
+        cache_conn
+            .as_ref()
+            .and_then(|conn| cache::get(conn, &callsign))
+    };
 
-    spinner.finish_and_clear();
+    let (record, source, cached_at) = match cached {
+        Some((record, cached_at)) => (record, "cache", Some(cached_at)),
+        None => {
+            let spinner = display::make_spinner(&format!("Looking up {callsign}…"));
+            let result = api::lookup_callsign(&callsign);
+            spinner.finish_and_clear();
 
-    match result {
-        Ok(record) => {
-            if opts.json {
-                println!("{}", serde_json::to_string_pretty(&record)?);
-            } else if opts.raw {
-                display::print_plain(&record);
-            } else {
-                display::print_pretty(&record, !opts.no_links);
+            let record = match result {
+                Ok(r) => r,
+                Err(e) => {
+                    display::print_error(&callsign, &e.to_string());
+                    std::process::exit(1);
+                }
+            };
+
+            if let Some(ref conn) = cache_conn {
+                let _ = cache::store(conn, &record);
             }
+
+            (record, "api", None)
         }
-        Err(e) => {
-            display::print_error(&callsign, &e.to_string());
-            std::process::exit(1);
-        }
+    };
+
+    if let Some(ref conn) = cache_conn {
+        let _ = cache::record_lookup(conn, &callsign, source);
+    }
+
+    if opts.json {
+        println!("{}", serde_json::to_string_pretty(&record)?);
+    } else if opts.raw {
+        display::print_plain(&record, cached_at);
+    } else {
+        display::print_pretty(&record, !opts.no_links, cached_at);
     }
 
     Ok(())
