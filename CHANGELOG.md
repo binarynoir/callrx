@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/binarynoir/callrx/compare/v0.2.0...v0.3.0) (2026-06-11)
+
+
+### Features
+
+* add man page for callrx and update Homebrew formula to include it ([aa9a175](https://github.com/binarynoir/callrx/commit/aa9a1751366cab588910acf10e0d9bfc1ae1f682))
+
 ## [0.2.0](https://github.com/binarynoir/callrx/compare/v0.1.1...v0.2.0) (2026-06-11)
 
 
