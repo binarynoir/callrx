@@ -6,6 +6,7 @@ on:
     paths-ignore: ["**.md", ".vscode/**"]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
