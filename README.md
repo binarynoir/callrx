@@ -8,6 +8,9 @@ Look up any US amateur radio callsign from the [FCC Universal Licensing System](
 [![Release Please](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml)
 [![Latest release](https://img.shields.io/github/v/release/binarynoir/callrx)](https://github.com/binarynoir/callrx/releases/latest)
 
+[![Support me on Buy Me a Coffee](https://img.shields.io/badge/Support%20me-Buy%20Me%20a%20Coffee-orange?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/binarynoir)
+[![Support me on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-blue?style=for-the-badge&logo=ko-fi)](https://ko-fi.com/binarynoir)
+
 ---
 
 ## Demo
