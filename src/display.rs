@@ -81,6 +81,12 @@ pub(crate) fn unix_to_date(ts: u64) -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// Converts a Unix timestamp to an HH:MM string (UTC).
+pub(crate) fn unix_to_time(ts: u64) -> String {
+    let secs = ts % 86_400;
+    format!("{:02}:{:02}", secs / 3_600, (secs % 3_600) / 60)
+}
+
 fn age_words(age_secs: u64) -> String {
     if age_secs < 120 {
         "just now".to_string()
@@ -351,6 +357,66 @@ pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
     }
 }
 
+// ── History output ────────────────────────────────────────────────────────────
+
+pub fn print_history(callsign: &str, events: &[(u64, String)]) {
+    let count = events.len();
+    let plural = if count == 1 { "lookup" } else { "lookups" };
+
+    println!();
+    println!(
+        "{} {}",
+        callsign.bold().bright_cyan(),
+        format!("· {count} {plural}").dimmed()
+    );
+
+    if events.is_empty() {
+        println!("  {}", "No lookup history found.".dimmed());
+        println!();
+        return;
+    }
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    println!();
+    for (ts, source) in events {
+        let date = unix_to_date(*ts);
+        let time = unix_to_time(*ts);
+        let age = now.saturating_sub(*ts);
+        let source_label = if source == "api" {
+            "live  ".bright_green().to_string()
+        } else {
+            "cached".dimmed().to_string()
+        };
+        println!(
+            "  {}   {}   {}",
+            format!("{date} {time}").dimmed(),
+            source_label,
+            age_words(age).dimmed()
+        );
+    }
+    println!();
+}
+
+pub fn print_history_plain(callsign: &str, events: &[(u64, String)]) {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    println!("Callsign: {callsign}");
+    println!("Lookups:  {}", events.len());
+    for (ts, source) in events {
+        let date = unix_to_date(*ts);
+        let time = unix_to_time(*ts);
+        let age = now.saturating_sub(*ts);
+        println!("{date} {time}  {source}  {}", age_words(age));
+    }
+}
+
 // ── Error output ──────────────────────────────────────────────────────────────
 
 pub fn print_error(callsign: &str, message: &str) {
@@ -364,7 +430,9 @@ pub fn print_error(callsign: &str, message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{age_words, cache_info_label, ttl_words, unix_to_date, visible_width};
+    use super::{
+        age_words, cache_info_label, ttl_words, unix_to_date, unix_to_time, visible_width,
+    };
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // ── visible_width ─────────────────────────────────────────────────────────
@@ -474,6 +542,30 @@ mod tests {
         assert!(label.contains("3 days ago"), "label: {label}");
         assert!(label.contains("4 days"), "label: {label}"); // refreshes in 4 days
         assert!(label.contains('-'), "label should contain date: {label}");
+    }
+
+    // ── unix_to_time ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn unix_to_time_midnight() {
+        assert_eq!(unix_to_time(0), "00:00");
+        assert_eq!(unix_to_time(86_400), "00:00"); // next day's midnight
+    }
+
+    #[test]
+    fn unix_to_time_noon() {
+        assert_eq!(unix_to_time(43_200), "12:00");
+    }
+
+    #[test]
+    fn unix_to_time_end_of_day() {
+        assert_eq!(unix_to_time(86_340), "23:59"); // one minute before midnight
+    }
+
+    #[test]
+    fn unix_to_time_known_timestamp() {
+        // 2001-09-09 01:46:40 UTC = 1_000_000_000
+        assert_eq!(unix_to_time(1_000_000_000), "01:46");
     }
 
     #[test]

@@ -38,6 +38,14 @@ enum Commands {
         #[command(flatten)]
         opts: OutputOpts,
     },
+    /// Show lookup history for a callsign
+    History {
+        /// The callsign to show history for (e.g. W1AW, KD9ABC)
+        callsign: String,
+        /// Output plain text without color or formatting
+        #[arg(long)]
+        raw: bool,
+    },
     /// Print a shell completion script to stdout
     Completions {
         /// Shell to generate completions for
@@ -67,6 +75,11 @@ struct OutputOpts {
 }
 
 fn main() -> Result<()> {
+    // Load .env when compiled in debug mode so `cargo run` uses CALLRX_CACHE_DIR
+    // from .env instead of the system cache directory. No-op in release builds.
+    #[cfg(debug_assertions)]
+    let _ = dotenvy::dotenv();
+
     color_eyre::install()?;
 
     let cli = Cli::parse();
@@ -75,6 +88,7 @@ fn main() -> Result<()> {
     match (cli.callsign, cli.command) {
         (Some(callsign), None) => run_lookup(&callsign, &cli.opts)?,
         (None, Some(Commands::Lookup { callsign, opts })) => run_lookup(&callsign, &opts)?,
+        (None, Some(Commands::History { callsign, raw })) => run_history(&callsign, raw)?,
         (None, Some(Commands::Completions { shell })) => {
             clap_complete::generate(shell, &mut Cli::command(), "callrx", &mut std::io::stdout());
         }
@@ -88,6 +102,21 @@ fn main() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn run_history(callsign: &str, raw: bool) -> Result<()> {
+    let callsign = callsign.to_uppercase();
+    let events = cache::open()
+        .ok()
+        .map(|conn| cache::get_history(&conn, &callsign))
+        .unwrap_or_default();
+
+    if raw {
+        display::print_history_plain(&callsign, &events);
+    } else {
+        display::print_history(&callsign, &events);
+    }
     Ok(())
 }
 
