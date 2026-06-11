@@ -6,7 +6,7 @@ Look up any US amateur radio callsign from the [FCC Universal Licensing System](
 
 [![CI](https://github.com/binarynoir/callrx/actions/workflows/ci.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/ci.yml)
 [![Release Please](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml)
-[![Release](https://github.com/binarynoir/callrx/actions/workflows/release.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/binarynoir/callrx)](https://github.com/binarynoir/callrx/releases/latest)
 
 ---
 
