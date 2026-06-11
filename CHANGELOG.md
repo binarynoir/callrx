@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/binarynoir/callrx/compare/v0.3.0...v0.4.0) (2026-06-11)
+
+
+### Features
+
+* update README to include demo GIF and remove text demo ([d4dba5a](https://github.com/binarynoir/callrx/commit/d4dba5a6cf88484b2c3e5b397a08bb75971dc507))
+
 ## [0.3.0](https://github.com/binarynoir/callrx/compare/v0.2.0...v0.3.0) (2026-06-11)
 
 
