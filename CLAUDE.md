@@ -148,32 +148,32 @@ piping to `jq`.
 
 ```json
 {
-	"status": "VALID", // "VALID" | "INVALID"
-	"type": "CLUB", // "CLUB" | "INDIVIDUAL" | "MILITARY" | etc.
-	"current": {
-		"callsign": "W1AW",
-		"operClass": "EXTRA" // EXTRA | ADVANCED | GENERAL | TECHNICIAN | NOVICE
-	},
-	"previous": { "callsign": "", "operClass": "" },
-	"trustee": { "callsign": "K1ZZ", "name": "SUMNER, DAVID G" },
-	"name": "ARRL HQ OPERATORS CLUB",
-	"address": {
-		"line1": "225 MAIN ST",
-		"line2": "NEWINGTON, CT 06111",
-		"attn": ""
-	},
-	"location": {
-		"latitude": "41.714776",
-		"longitude": "-72.726744",
-		"gridsquare": "FN31pr"
-	},
-	"otherInfo": {
-		"grantDate": "12/02/2010",
-		"expiryDate": "02/26/2021",
-		"lastActionDate": "12/02/2010",
-		"frn": "0004511143",
-		"ulsUrl": "http://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey=780866"
-	}
+    "status": "VALID", // "VALID" | "INVALID"
+    "type": "CLUB", // "CLUB" | "INDIVIDUAL" | "MILITARY" | etc.
+    "current": {
+        "callsign": "W1AW",
+        "operClass": "EXTRA" // EXTRA | ADVANCED | GENERAL | TECHNICIAN | NOVICE
+    },
+    "previous": { "callsign": "", "operClass": "" },
+    "trustee": { "callsign": "K1ZZ", "name": "SUMNER, DAVID G" },
+    "name": "ARRL HQ OPERATORS CLUB",
+    "address": {
+        "line1": "225 MAIN ST",
+        "line2": "NEWINGTON, CT 06111",
+        "attn": ""
+    },
+    "location": {
+        "latitude": "41.714776",
+        "longitude": "-72.726744",
+        "gridsquare": "FN31pr"
+    },
+    "otherInfo": {
+        "grantDate": "12/02/2010",
+        "expiryDate": "02/26/2021",
+        "lastActionDate": "12/02/2010",
+        "frn": "0004511143",
+        "ulsUrl": "http://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey=780866"
+    }
 }
 ```
 
@@ -290,10 +290,8 @@ for the submission process.
 
 ## Future ideas / roadmap
 
-- [ ] `callrx search --name "John Smith"` — search by licensee name
 - [ ] `callrx batch <file>` — look up a list of callsigns from a file
-- [ ] `callrx history <callsign>` — show previous callsigns
-- [ ] Offline mode: cache recent lookups in `~/.cache/callrx/`
+- [ ] `callrx history <callsign>` — show previous callsigns (DB ready: `lookup_history` table)
 - [ ] DXCC country detection from callsign prefix
 - [ ] QRZ.com XML API as a fallback source (requires account)
 

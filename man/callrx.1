@@ -82,6 +82,14 @@ auto-detects link support via
 and related environment variables.
 This flag forces plain-text URLs regardless of terminal capabilities.
 .TP
+.B \-\-no\-cache
+Bypass the local cache and always fetch fresh data from callook.info.
+The fresh result is still written to the cache so subsequent lookups
+can be served from it.
+See
+.B CACHE
+below.
+.TP
 .B \-h ", " \-\-help
 Print help information and exit.
 .TP
@@ -112,6 +120,36 @@ Install zsh completions:
 .TP
 Install bash completions (current session):
 .B eval "$(callrx completions bash)"
+.SH CACHE
+.B callrx
+caches every successful lookup in a local SQLite database for 7 days,
+matching callook.info's weekly FCC bulk-data sync schedule.
+Cached lookups are served instantly and display a
+.I "Cached X ago"
+note in the output.
+.PP
+The database is stored at:
+.IP \(bu 4
+.B macOS:
+.I ~/Library/Caches/callrx/callrx.db
+.IP \(bu 4
+.B Linux:
+.I ~/.cache/callrx/callrx.db
+(or
+.IR $XDG_CACHE_HOME /callrx/callrx.db
+if set)
+.IP \(bu 4
+.B Windows:
+.I %LOCALAPPDATA%\callrx\callrx.db
+.PP
+Use
+.B \-\-no\-cache
+to bypass the read and force a fresh fetch.
+The fresh result is still written back so the next lookup benefits from it.
+Every lookup (cached or live) is recorded in the
+.I lookup_history
+table for use by
+.BR "callrx history" .
 .SH EXIT STATUS
 .TP
 .B 0
@@ -164,8 +202,10 @@ available through callook.info.
 License data may be up to one week out of date, as callook.info syncs
 from FCC bulk data on a weekly schedule.
 .IP \(bu 4
-Every invocation makes an HTTP request to callook.info.
-There is no local cache.
+Lookups are cached locally for 7 days.
+Use
+.B \-\-no\-cache
+to force a fresh fetch from callook.info.
 .IP \(bu 4
 The expired-license indicator uses an approximate date calculation
 (leap years are approximated) and is a display hint only.

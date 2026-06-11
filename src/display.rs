@@ -1,9 +1,10 @@
 use crate::api::CallsignRecord;
+use crate::cache::TTL_SECS;
 use crate::hyperlink;
 use anstream::{eprintln, println};
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // ── Spinner ───────────────────────────────────────────────────────────────────
 
@@ -62,13 +63,70 @@ fn visible_width(s: &str) -> usize {
     width
 }
 
-pub fn print_pretty(record: &CallsignRecord, links_enabled: bool) {
+/// Converts a Unix timestamp to a YYYY-MM-DD string (UTC).
+///
+/// Uses Howard Hinnant's civil_from_days algorithm — no date library needed.
+pub(crate) fn unix_to_date(ts: u64) -> String {
+    let days = ts / 86_400;
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+fn age_words(age_secs: u64) -> String {
+    if age_secs < 120 {
+        "just now".to_string()
+    } else if age_secs < 3_600 {
+        format!("{} min ago", age_secs / 60)
+    } else if age_secs < 172_800 {
+        format!("{} hr ago", age_secs / 3_600)
+    } else {
+        format!("{} days ago", age_secs / 86_400)
+    }
+}
+
+fn ttl_words(remaining_secs: u64) -> String {
+    if remaining_secs < 3_600 {
+        format!("{} min", remaining_secs / 60)
+    } else if remaining_secs < 172_800 {
+        format!("{} hr", remaining_secs / 3_600)
+    } else {
+        format!("{} days", remaining_secs / 86_400)
+    }
+}
+
+/// Returns a single human-readable string describing the cache entry, e.g.:
+/// "2026-06-09 · fetched 3 days ago · refreshes in 4 days"
+pub(crate) fn cache_info_label(cached_at: u64, ttl_secs: u64) -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let age = now.saturating_sub(cached_at);
+    let remaining = ttl_secs.saturating_sub(age);
+    let date = unix_to_date(cached_at);
+    format!(
+        "{date} · {} · refreshes in {}",
+        age_words(age),
+        ttl_words(remaining)
+    )
+}
+
+pub fn print_pretty(record: &CallsignRecord, links_enabled: bool, cached_at: Option<u64>) {
     // Detect OSC 8 support — respect the caller's override flag
     let use_links = links_enabled && hyperlink::osc8_supported();
 
     let callsign = record.callsign();
     let name = record.name.as_deref().unwrap_or("—");
-    let rows = build_rows(record, use_links);
+    let rows = build_rows(record, use_links, cached_at);
 
     // ── Render a content-sized box, measuring visible width to stay aligned ─────
     let label_w = rows
@@ -98,11 +156,21 @@ pub fn print_pretty(record: &CallsignRecord, links_enabled: bool) {
         println!("│ {label_cell}   {value}{pad} │");
     }
     println!("└{}┘", "─".repeat(inner_w));
+    if cached_at.is_some() {
+        println!(
+            "  {}",
+            "Cached data · use --no-cache to fetch fresh".dimmed()
+        );
+    }
     println!();
 }
 
 /// Builds the `(label, styled value)` rows shown in the pretty table.
-fn build_rows(record: &CallsignRecord, use_links: bool) -> Vec<(&'static str, String)> {
+fn build_rows(
+    record: &CallsignRecord,
+    use_links: bool,
+    cached_at: Option<u64>,
+) -> Vec<(&'static str, String)> {
     let expired = record.is_expired();
     let mut rows: Vec<(&'static str, String)> = Vec::new();
 
@@ -216,12 +284,19 @@ fn build_rows(record: &CallsignRecord, use_links: bool) -> Vec<(&'static str, St
         hyperlink::link(&callook_url, &callook_url, use_links),
     ));
 
+    if let Some(ca) = cached_at {
+        rows.push((
+            "Cached",
+            cache_info_label(ca, TTL_SECS).dimmed().to_string(),
+        ));
+    }
+
     rows
 }
 
 // ── Plain text output (--raw) ─────────────────────────────────────────────────
 
-pub fn print_plain(record: &CallsignRecord) {
+pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
     println!("Callsign:    {}", record.callsign());
     println!("Status:      {}", record.status);
 
@@ -270,6 +345,10 @@ pub fn print_plain(record: &CallsignRecord) {
             println!("ULS URL:     {uls}");
         }
     }
+
+    if let Some(ca) = cached_at {
+        println!("Cached:      {}", cache_info_label(ca, TTL_SECS));
+    }
 }
 
 // ── Error output ──────────────────────────────────────────────────────────────
@@ -285,7 +364,10 @@ pub fn print_error(callsign: &str, message: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::visible_width;
+    use super::{age_words, cache_info_label, ttl_words, unix_to_date, visible_width};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // ── visible_width ─────────────────────────────────────────────────────────
 
     #[test]
     fn plain_text_width_is_char_count() {
@@ -295,15 +377,112 @@ mod tests {
 
     #[test]
     fn ansi_color_codes_are_not_counted() {
-        // "\x1b[1m\x1b[96mW1AW\x1b[39m\x1b[0m" renders as 4 columns.
         let styled = "\x1b[1m\x1b[96mW1AW\x1b[39m\x1b[0m";
         assert_eq!(visible_width(styled), 4);
     }
 
     #[test]
     fn osc8_hyperlink_counts_only_visible_label() {
-        // The URL inside the OSC 8 escape must not inflate the width.
         let link = "\x1b]8;;https://example.com/very/long/path\x1b\\click\x1b]8;;\x1b\\";
         assert_eq!(visible_width(link), "click".len());
+    }
+
+    // ── unix_to_date ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn unix_epoch_is_1970_01_01() {
+        assert_eq!(unix_to_date(0), "1970-01-01");
+    }
+
+    #[test]
+    fn known_timestamp_round_trips() {
+        // 2001-09-09 01:46:40 UTC (the "Unix billennium")
+        assert_eq!(unix_to_date(1_000_000_000), "2001-09-09");
+    }
+
+    #[test]
+    fn leap_year_feb_29_is_correct() {
+        // 2000-02-29 00:00:00 UTC = 951782400
+        assert_eq!(unix_to_date(951_782_400), "2000-02-29");
+    }
+
+    #[test]
+    fn non_leap_year_mar_1_is_correct() {
+        // 2001-03-01 00:00:00 UTC = 983404800
+        assert_eq!(unix_to_date(983_404_800), "2001-03-01");
+    }
+
+    #[test]
+    fn year_boundary_new_year() {
+        // 2026-01-01 00:00:00 UTC = 1767225600
+        assert_eq!(unix_to_date(1_767_225_600), "2026-01-01");
+    }
+
+    // ── age_words / ttl_words ─────────────────────────────────────────────────
+
+    #[test]
+    fn age_words_just_now() {
+        assert_eq!(age_words(30), "just now");
+        assert_eq!(age_words(119), "just now");
+    }
+
+    #[test]
+    fn age_words_minutes() {
+        assert_eq!(age_words(300), "5 min ago");
+        assert_eq!(age_words(3599), "59 min ago");
+    }
+
+    #[test]
+    fn age_words_hours() {
+        assert_eq!(age_words(3_600), "1 hr ago");
+        assert_eq!(age_words(7_200), "2 hr ago");
+    }
+
+    #[test]
+    fn age_words_days() {
+        assert_eq!(age_words(172_800), "2 days ago");
+        assert_eq!(age_words(7 * 86_400), "7 days ago");
+    }
+
+    #[test]
+    fn ttl_words_minutes() {
+        assert_eq!(ttl_words(1_800), "30 min");
+    }
+
+    #[test]
+    fn ttl_words_hours() {
+        assert_eq!(ttl_words(7_200), "2 hr");
+    }
+
+    #[test]
+    fn ttl_words_days() {
+        assert_eq!(ttl_words(4 * 86_400), "4 days");
+    }
+
+    // ── cache_info_label ──────────────────────────────────────────────────────
+
+    #[test]
+    fn cache_info_label_contains_date_and_age_and_expiry() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let cached_3_days_ago = now - 3 * 86_400;
+        let ttl = 7 * 24 * 3_600; // 7 days
+
+        let label = cache_info_label(cached_3_days_ago, ttl);
+        assert!(label.contains("3 days ago"), "label: {label}");
+        assert!(label.contains("4 days"), "label: {label}"); // refreshes in 4 days
+        assert!(label.contains('-'), "label should contain date: {label}");
+    }
+
+    #[test]
+    fn cache_info_label_shows_correct_date() {
+        // Use the Unix billennium (2001-09-09) as a fixed cached_at.
+        let label = cache_info_label(1_000_000_000, 7 * 86_400);
+        assert!(
+            label.starts_with("2001-09-09"),
+            "label should start with date: {label}"
+        );
     }
 }
