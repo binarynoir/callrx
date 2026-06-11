@@ -10,6 +10,17 @@ on:
         description: "Existing tag to build and release (e.g. v0.1.0)"
         required: true
         type: string
+  # Called by release-please.yml after it creates a release.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to build and attach binaries to"
+        required: true
+        type: string
+      attach_only:
+        description: "Skip release-note generation; only upload binaries to the existing release"
+        type: boolean
+        default: true
 
 permissions:
   contents: write   # Needed to create GitHub releases and upload assets
@@ -180,7 +191,9 @@ jobs:
           name: "callrx ${{ inputs.tag || github.ref_name }}"
           draft: false
           prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}   # e.g. v1.0.0-beta
-          generate_release_notes: true
+          # release-please already wrote the notes; only generate them for
+          # standalone tag-push / manual runs (attach_only is unset there).
+          generate_release_notes: ${{ !inputs.attach_only }}
           files: |
             artifacts/**/*.tar.gz
             artifacts/**/*.zip

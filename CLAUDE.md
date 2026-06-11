@@ -5,6 +5,20 @@ session starts with accurate, complete knowledge of the codebase.
 
 ---
 
+## Working conventions (read first)
+
+- **Keep `README.md` up to date.** When a change affects anything user-facing —
+  CLI flags, commands, usage examples, installation, build/release steps,
+  supported platforms, badges, or the demo output — update `README.md` in the
+  same change. Treat the README as part of the definition of "done"; never let it
+  drift from the actual behaviour of the code or workflows.
+- **Never use emojis.** Do not add emojis to code, comments, doc strings, CLI
+  output, commit messages, `README.md`, `CLAUDE.md`, or any other file. Plain
+  text only. (Functional Unicode glyphs already used in terminal output, such as
+  the `✓` / `✗` / `⚠` status markers, are not decorative emoji and may stay.)
+
+---
+
 ## What this project is
 
 `callrx` is a cross-platform CLI tool for looking up amateur radio callsigns from
@@ -179,12 +193,31 @@ cargo fmt
 
 ## Release process
 
-1. Bump version in `Cargo.toml`
-2. Commit: `git commit -am "chore: bump to v0.2.0"`
-3. Tag: `git tag v0.2.0`
-4. Push: `git push && git push --tags`
-5. GitHub Actions (`release.yml`) builds binaries for all platforms and creates a
-   GitHub Release automatically with generated release notes.
+Versioning is automated with **release-please** (`release-please.yml`) driven by
+[Conventional Commits](https://www.conventionalcommits.org/). You do **not** edit
+the version in `Cargo.toml` by hand.
+
+1. Land work on `main` using conventional commit messages:
+   - `fix: …` → patch bump (0.1.0 → 0.1.1)
+   - `feat: …` → minor bump (0.1.0 → 0.2.0)
+   - `feat!: …` / `fix!: …` / a `BREAKING CHANGE:` footer → major bump
+   - `chore:`, `docs:`, `refactor:`, `test:`, `ci:` → no release on their own
+2. release-please opens/maintains a **Release PR** that bumps `Cargo.toml` +
+   `Cargo.lock` and updates `CHANGELOG.md`. Review and merge it when ready.
+3. On merge, release-please creates the `vX.Y.Z` tag and a GitHub Release with
+   notes from the changelog, then calls `release.yml` (via `workflow_call`) to
+   build binaries for all platforms and attach them to that release.
+
+State lives in `release-please-config.json` and `.release-please-manifest.json`.
+
+**Manual / re-release:** `release.yml` can also be run from the Actions tab
+("Run workflow" → enter an existing tag), or triggered by pushing a `v*` tag
+directly. The `workflow_call` path skips note generation so it never clobbers
+release-please's notes; the manual paths generate notes as before.
+
+**Why workflow_call instead of a tag trigger:** a tag pushed by release-please's
+`GITHUB_TOKEN` will not trigger the `push: tags` workflow (GitHub's recursion
+guard). Invoking `release.yml` directly via `workflow_call` avoids needing a PAT.
 
 **Build targets:**
 

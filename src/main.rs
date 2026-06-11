@@ -6,7 +6,7 @@ use anstream::{eprintln, println};
 use clap::{Args, Parser, Subcommand};
 use color_eyre::Result;
 
-/// 📡 callrx — Amateur radio callsign lookup (FCC ULS via callook.info)
+/// callrx — Amateur radio callsign lookup (FCC ULS via callook.info)
 #[derive(Parser, Debug)]
 #[command(
     name = "callrx",

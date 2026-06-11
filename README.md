@@ -1,11 +1,12 @@
-# 📡 callrx
+# callrx
 
 > Beautiful amateur radio callsign lookup for the terminal
 
 Look up any US amateur radio callsign from the [FCC Universal Licensing System](https://wireless2.fcc.gov/UlsApp/UlsSearch/searchLicense.jsp) directly in your terminal — with color output, clickable links, and a clean table layout.
 
-[![CI](https://github.com/your-username/callrx/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/callrx/actions/workflows/ci.yml)
-[![Release](https://github.com/your-username/callrx/actions/workflows/release.yml/badge.svg)](https://github.com/your-username/callrx/releases)
+[![CI](https://github.com/binarynoir/callrx/actions/workflows/ci.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/ci.yml)
+[![Release Please](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml)
+[![Release](https://github.com/binarynoir/callrx/actions/workflows/release.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release.yml)
 
 ---
 
@@ -38,7 +39,7 @@ OSC 8-capable terminals.
 
 ### Download a binary (recommended)
 
-Grab the latest binary for your platform from the [Releases page](https://github.com/your-username/callrx/releases):
+Grab the latest binary for your platform from the [Releases page](https://github.com/binarynoir/callrx/releases):
 
 | Platform              | File                                             |
 | --------------------- | ------------------------------------------------ |
@@ -61,7 +62,7 @@ callrx --version
 ### Build from source
 
 ```bash
-git clone https://github.com/your-username/callrx
+git clone https://github.com/binarynoir/callrx
 cd callrx
 cargo build --release
 ./target/release/callrx --version
@@ -101,9 +102,20 @@ callrx lookup W1AW | grep Grid # Colors stripped when piped
 
 Data comes from [callook.info](https://callook.info), which mirrors the FCC Universal
 Licensing System (ULS) and updates weekly. callook.info is not affiliated with the ARRL
-or the FCC — it is an independent service maintained by the ham radio community.
+or the FCC — it is an independent service.
 
 For the authoritative FCC record, click the **ULS Record** link in the output.
+
+### Thanks to callook.info
+
+`callrx` would not exist without [callook.info](https://callook.info) and its clean,
+free JSON API. It is built and maintained by **Josh Dick**
+([W1JDD](https://callook.info/w1jdd), [joshdick.net](https://joshdick.net)) as a
+service to the ham radio community.
+
+If `callrx` is useful to you, please consider
+[**donating to callook.info**](https://callook.info/donate/) to help Josh cover
+hosting costs and keep the service running. 73!
 
 ---
 
@@ -119,6 +131,67 @@ OSC 8 hyperlinks work in:
 - Most VTE-based terminals
 
 Links degrade gracefully to plain text in unsupported terminals or when output is piped.
+
+---
+
+## Development
+
+Requires the stable [Rust](https://rustup.rs) toolchain (pinned in `rust-toolchain.toml`).
+
+```bash
+# Build
+cargo build                       # debug build
+cargo build --release             # optimized binary at target/release/callrx
+
+# Run
+cargo run -- W1AW                 # run against a callsign
+cargo run -- W1AW --json          # the shorthand accepts the same flags as `lookup`
+
+# Test
+cargo test
+
+# Lint & format (matches CI)
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+```
+
+CI (`.github/workflows/ci.yml`) runs `fmt`, `clippy -D warnings`, `build`, and
+`test` on Linux, macOS, and Windows for every push and pull request. It can also
+be run on demand from the **Actions** tab.
+
+---
+
+## Releasing
+
+Versioning is automated with [release-please](https://github.com/googleapis/release-please)
+and driven by [Conventional Commits](https://www.conventionalcommits.org/) — you
+**don't** edit the version in `Cargo.toml` by hand.
+
+1. Merge work into `main` using conventional commit messages:
+
+   | Commit prefix                      | Effect                     |
+   | ---------------------------------- | -------------------------- |
+   | `fix: …`                           | patch bump (0.1.0 → 0.1.1) |
+   | `feat: …`                          | minor bump (0.1.0 → 0.2.0) |
+   | `feat!: …` / `BREAKING CHANGE:`    | major bump (0.1.0 → 1.0.0) |
+   | `chore:` `docs:` `refactor:` `ci:` | no release on their own    |
+
+2. release-please opens and maintains a **Release PR** that bumps `Cargo.toml` +
+   `Cargo.lock` and updates `CHANGELOG.md`. Review and merge it when you're ready
+   to ship.
+3. On merge it creates the `vX.Y.Z` tag and a GitHub Release (notes from the
+   changelog), then builds binaries for all platforms and attaches them.
+
+**Build targets:** macOS (Apple Silicon + Intel), Linux (x86_64, ARM64, ARMv7),
+and Windows x86_64.
+
+**Manual / re-release:** the **Release** workflow can also be run from the
+**Actions** tab ("Run workflow" → enter an existing tag), or triggered by pushing
+a `v*` tag directly.
+
+> **One-time setup:** in **Settings → Actions → General**, enable _"Allow GitHub
+> Actions to create and approve pull requests"_ so release-please can open the
+> Release PR.
 
 ---
 
