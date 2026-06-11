@@ -109,6 +109,15 @@ jobs:
 
             def install
               bin.install "callrx"
+              man1.install "man/callrx.1"
+            end
+
+            def caveats
+              <<~EOS
+                If callrx is not immediately available in your current shell, run:
+                  source ~/.zshrc
+                or open a new terminal window.
+              EOS
             end
 
             test do

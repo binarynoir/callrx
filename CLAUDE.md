@@ -12,6 +12,12 @@ session starts with accurate, complete knowledge of the codebase.
   supported platforms, badges, or the demo output — update `README.md` in the
   same change. Treat the README as part of the definition of "done"; never let it
   drift from the actual behaviour of the code or workflows.
+- **Keep `man/callrx.1` up to date.** When a change affects CLI flags, subcommands,
+  output formats, exit codes, or any documented behaviour, update the man page in
+  the same change. The `.TH` header date line should reflect the month and year of
+  the change (e.g. `"June 2026"`). The version placeholder `@@VERSION@@` in the
+  source is substituted automatically by the release workflow — do not replace it
+  by hand.
 - **Never use emojis.** Do not add emojis to code, comments, doc strings, CLI
   output, commit messages, `README.md`, `CLAUDE.md`, or any other file. Plain
   text only. (Functional Unicode glyphs already used in terminal output, such as
@@ -57,6 +63,8 @@ callrx/
 │   ├── api.rs           — callook.info HTTP client, response types (serde)
 │   ├── display.rs       — pretty table output, plain text, error output, spinner
 │   └── hyperlink.rs     — OSC 8 terminal hyperlink helper + support detection
+├── man/
+│   └── callrx.1         — man page (troff); @@VERSION@@ substituted by release.yml
 ├── .vscode/
 │   ├── extensions.json  — recommended extensions
 │   ├── settings.json    — rust-analyzer, editor, clippy settings
@@ -242,7 +250,10 @@ guard). Invoking `release.yml` directly via `workflow_call` avoids needing a PAT
 
 `callrx` is installable via Homebrew from the
 [`binarynoir/homebrew-callrx`](https://github.com/binarynoir/homebrew-callrx)
-tap: `brew install binarynoir/callrx/callrx`.
+tap: `brew install binarynoir/callrx/callrx`. The full maintainer guide (setup,
+automation, homebrew/core, troubleshooting) lives in the **private**
+`binarynoir/programming-cookbook` repo at `homebrew/callrx/HOMEBREW.md` — it is
+kept out of this public repo on purpose.
 
 - **Formula type:** the formula installs the **prebuilt release binary** for the
   user's platform (no Rust toolchain needed). It uses `on_macos` / `on_linux`
@@ -262,6 +273,18 @@ tap: `brew install binarynoir/callrx/callrx`.
 - **Do not hand-edit** `Formula/callrx.rb`; it is overwritten on every release.
   If the release asset naming or target list changes, update the heredoc
   template inside `update-homebrew.yml` to match.
+
+### homebrew/core (the bare `brew install callrx`) — separate path
+
+The tap above is **not** homebrew/core. homebrew/core is **source-only** (it
+rejects prebuilt-binary URLs) and gated on Homebrew's notability requirements, so
+its formula must be a different, source-build recipe — kept as a versioned draft
+in the private `binarynoir/programming-cookbook` repo at `homebrew/callrx/callrx.rb`
+(`depends_on "rust" => :build`, `cargo install` via `std_cargo_args`,
+source-tarball `url` + `sha256`). Do not try to put the prebuilt formula in
+homebrew/core, and do not merge the two formulae — they have the same class name
+and would collide. See `homebrew/callrx/HOMEBREW.md` (Part B) in that private repo
+for the submission process.
 
 ---
 
