@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/binarynoir/callrx/compare/callrx-v0.1.0...callrx-v0.1.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* package README and LICENSE from repo root in release tarball ([072f46e](https://github.com/binarynoir/callrx/commit/072f46ecc897b840c56e0459fe04a9080476e158))
+
 ## [0.1.0](https://github.com/binarynoir/callrx/compare/callrx-v0.1.0...callrx-v0.1.0) (2026-06-11)
 
 
