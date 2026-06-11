@@ -119,11 +119,18 @@ jobs:
           RELEASE_DIR="target/${TARGET}/release"
           ARCHIVE_NAME="${BIN_NAME}-${{ inputs.tag || github.ref_name }}-${TARGET}.tar.gz"
 
-          # Include the binary (from the release dir) plus README and LICENSE
-          # (from the repo root). Each -C only affects the files that follow it.
+          # Substitute @@VERSION@@ in the man page and stage it for packaging.
+          VERSION_STR="${{ inputs.tag || github.ref_name }}"
+          VERSION_STR="${VERSION_STR#v}"
+          mkdir -p /tmp/man_staging/man
+          sed "s/@@VERSION@@/${VERSION_STR}/g" man/callrx.1 > /tmp/man_staging/man/callrx.1
+
+          # Include the binary (from the release dir), README, LICENSE, and the
+          # man page (from the staging dir). Each -C only affects the paths that follow.
           tar -czf "${ARCHIVE_NAME}" \
             -C "${RELEASE_DIR}" "${BIN_NAME}" \
-            -C "${GITHUB_WORKSPACE}" README.md LICENSE
+            -C "${GITHUB_WORKSPACE}" README.md LICENSE \
+            -C /tmp/man_staging man/callrx.1
 
           echo "ASSET=${ARCHIVE_NAME}" >> "$GITHUB_ENV"
 
