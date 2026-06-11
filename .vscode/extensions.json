@@ -1,0 +1,28 @@
+{
+  "recommendations": [
+    // Rust — core tooling
+    "rust-lang.rust-analyzer",       // IntelliSense, inlay hints, code actions
+    "vadimcn.vscode-lldb",           // Native debugger (LLDB) for macOS/Linux
+    "ms-vscode.cpptools",            // Needed on Windows for MSVC debugger
+    "serayuzgur.crates",             // Inline crate version hints in Cargo.toml
+    "tamasfe.even-better-toml",      // TOML syntax, formatting, validation
+
+    // Code quality
+    "usernamehw.errorlens",          // Inline error/warning messages
+    "streetsidesoftware.code-spell-checker", // Catches typos in comments/strings
+    "editorconfig.editorconfig",     // Consistent formatting across editors
+
+    // Git
+    "eamodio.gitlens",               // Rich git blame, history, code lens
+    "mhutchie.git-graph",            // Visual git branch graph
+
+    // Productivity
+    "gruntfuggly.todo-tree",         // Highlights TODO/FIXME/HACK comments
+    "christian-kohler.path-intellisense", // Filename autocomplete
+    "mechatroner.rainbow-csv",       // Useful if you ever inspect FCC bulk data CSV
+
+    // Markdown / docs
+    "yzhang.markdown-all-in-one",    // CLAUDE.md and README editing
+    "davidanson.vscode-markdownlint" // Linting for markdown files
+  ]
+}
