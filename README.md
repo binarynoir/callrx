@@ -15,22 +15,7 @@ Look up any US amateur radio callsign from the [FCC Universal Licensing System](
 
 ## Demo
 
-```txt
-  W1AW · ARRL HQ OPERATORS CLUB
-  ──────────────────────────────────────────────────
-┌─────────────┬──────────────────────────────────────────────────┐
-│      Status │ ✓ VALID                                          │
-│        Type │ CLUB                                             │
-│     Trustee │ K1ZZ — SUMNER, DAVID G                           │
-│     Address │ 225 MAIN ST                                      │
-│             │ NEWINGTON, CT 06111                              │
-│        Grid │ FN31pr (41.714776, -72.726744)                   │
-│     Granted │ 12/02/2010                                       │
-│     Expires │ 02/26/2031                                       │
-│  ULS Record │ https://wireless2.fcc.gov/UlsApp/...             │
-│ callook.info│ https://callook.info/W1AW                        │
-└─────────────┴──────────────────────────────────────────────────┘
-```
+![callrx demo](callrx-demo.gif)
 
 Links are **clickable** in [iTerm2](https://iterm2.com), [WezTerm](https://wezfurlong.org/wezterm/),
 [Windows Terminal](https://aka.ms/terminal), [Kitty](https://sw.kovidgoyal.net/kitty/), and other
