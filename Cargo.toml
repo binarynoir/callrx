@@ -1,6 +1,6 @@
 [package]
 name = "callrx"
-version = "0.1.1"
+version = "0.1.0"
 edition = "2024"
 authors = ["John Smith III"]
 description = "A beautiful CLI tool for amateur radio callsign lookup via the FCC ULS database"
