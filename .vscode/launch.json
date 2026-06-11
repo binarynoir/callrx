@@ -1,0 +1,95 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // ── Basic callsign lookup (shorthand form) ────────────────────────────
+    {
+      "name": "▶ callrx W1AW",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["W1AW"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1",
+        "RUST_LOG": "debug"
+      }
+    },
+
+    // ── lookup subcommand ─────────────────────────────────────────────────
+    {
+      "name": "▶ callrx lookup W1AW",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["lookup", "W1AW"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+
+    // ── JSON output ───────────────────────────────────────────────────────
+    {
+      "name": "▶ callrx lookup W1AW --json",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["lookup", "W1AW", "--json"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+
+    // ── Plain/raw output ──────────────────────────────────────────────────
+    {
+      "name": "▶ callrx lookup W1AW --raw",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["lookup", "W1AW", "--raw"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+
+    // ── Custom callsign (edit args to try your own) ───────────────────────
+    {
+      "name": "▶ callrx <CUSTOM>",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["${input:callsign}"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      }
+    },
+
+    // ── Help output ───────────────────────────────────────────────────────
+    {
+      "name": "▶ callrx --help",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/callrx",
+      "args": ["--help"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build"
+    }
+  ],
+
+  "inputs": [
+    {
+      "id": "callsign",
+      "type": "promptString",
+      "description": "Enter a callsign to look up",
+      "default": "KD9ABC"
+    }
+  ]
+}

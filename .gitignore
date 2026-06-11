@@ -1,0 +1,15 @@
+# Rust build output
+/target/
+
+# Cargo lock is committed for binaries, not libraries
+# Keep it: Cargo.lock
+
+# IDE
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local

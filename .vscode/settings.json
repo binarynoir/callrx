@@ -1,0 +1,93 @@
+{
+  // ── Rust Analyzer ────────────────────────────────────────────────────────
+  "rust-analyzer.checkOnSave": true,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.extraArgs": [
+    "--",
+    "-W", "clippy::all",
+    "-W", "clippy::pedantic",
+    "-A", "clippy::module_name_repetitions"
+  ],
+  "rust-analyzer.inlayHints.parameterHints.enable": true,
+  "rust-analyzer.inlayHints.typeHints.enable": true,
+  "rust-analyzer.inlayHints.chainingHints.enable": true,
+  "rust-analyzer.cargo.features": "all",
+  "rust-analyzer.procMacro.enable": true,
+
+  // ── Editor ───────────────────────────────────────────────────────────────
+  "[rust]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "[toml]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": { "comments": "off", "strings": "off", "other": "off" }
+  },
+  "editor.rulers": [100],
+  "editor.showUnused": true,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": true,
+
+  // ── Terminal ──────────────────────────────────────────────────────────────
+  "terminal.integrated.env.osx": {
+    "RUST_BACKTRACE": "1",
+    "RUST_LOG": "debug"
+  },
+  "terminal.integrated.env.linux": {
+    "RUST_BACKTRACE": "1",
+    "RUST_LOG": "debug"
+  },
+  "terminal.integrated.env.windows": {
+    "RUST_BACKTRACE": "1",
+    "RUST_LOG": "debug"
+  },
+
+  // ── Error Lens ───────────────────────────────────────────────────────────
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+  "errorLens.followCursor": "allLines",
+
+  // ── TODO Tree ─────────────────────────────────────────────────────────────
+  "todo-tree.general.tags": ["TODO", "FIXME", "HACK", "NOTE", "SAFETY", "PERF"],
+  "todo-tree.highlights.defaultHighlight": {
+    "icon": "alert",
+    "type": "text",
+    "foreground": "#FFD700",
+    "background": "#1e1e1e"
+  },
+  "cSpell.words": [
+    "arrl",
+    "anstream",
+    "armv",
+    "callook",
+    "callrx",
+    "callsign",
+    "callsigns",
+    "chrono",
+    "clippy",
+    "codegen",
+    "dtolnay",
+    "DXCC",
+    "gnueabihf",
+    "gridsquare",
+    "indicatif",
+    "lldb",
+    "minreq",
+    "msvc",
+    "newington",
+    "Ofcom",
+    "oper",
+    "peekable",
+    "serde",
+    "softprops",
+    "Swatinem",
+    "tcall",
+    "tname"
+  ],
+
+}

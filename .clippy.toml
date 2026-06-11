@@ -1,0 +1,7 @@
+# .clippy.toml — project-level Clippy configuration
+
+# Allow slightly longer lines in some cases
+too-many-arguments-threshold = 8
+
+# Cognitive complexity threshold (default is 25)
+cognitive-complexity-threshold = 20
