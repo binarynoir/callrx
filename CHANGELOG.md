@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/binarynoir/callrx/compare/v0.6.0...v0.7.0) (2026-06-11)
+
+
+### Features
+
+* add lookup history feature with caching support ([ff52598](https://github.com/binarynoir/callrx/commit/ff525981105ccb9d6590821b8dd4489e1acf57c1))
+
 ## [0.6.0](https://github.com/binarynoir/callrx/compare/v0.5.0...v0.6.0) (2026-06-11)
 
 
