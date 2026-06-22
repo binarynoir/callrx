@@ -85,7 +85,7 @@ callrx history <CALLSIGN> [--raw]
 callrx completions <SHELL>
 
 OPTIONS:
-    --json       Output raw JSON from callook.info
+    --json       Output the raw JSON response from the callrx-service API
     --raw        Plain text output (no color, no formatting)
     --no-links   Disable clickable hyperlinks
     --no-cache   Bypass the local cache; always fetch fresh data
@@ -103,7 +103,7 @@ callrx lookup KD9ABC           # Via subcommand
 callrx lookup W1AW --json      # Raw JSON (pipe to jq)
 callrx lookup W1AW --raw       # Plain text (pipe to grep)
 callrx lookup W1AW --no-cache  # Force a fresh API fetch
-callrx lookup W1AW | grep Grid # Colors stripped when piped
+callrx lookup W1AW | grep Expires # Colors stripped when piped
 callrx history W1AW            # Show all past lookups of W1AW
 callrx history W1AW --raw      # History as plain text (for scripts)
 ```
@@ -111,7 +111,7 @@ callrx history W1AW --raw      # History as plain text (for scripts)
 ### Local cache
 
 `callrx` caches every successful lookup in a local SQLite database for 7 days
-(matching callook.info's weekly FCC sync schedule). Subsequent lookups for the
+(matching the FCC's weekly ULS publication schedule). Subsequent lookups for the
 same callsign are served instantly from the cache and show a "Cached X ago"
 note in the output.
 
@@ -144,9 +144,9 @@ W1AW · 3 lookups
   2026-06-09 14:22   live     2 days ago
 ```
 
-`live` means the data was fetched fresh from callook.info; `cached` means it
-was served from the local cache. Use `--raw` for plain text output suitable
-for scripting.
+`live` means the data was fetched fresh from the callrx-service API; `cached`
+means it was served from the local cache. Use `--raw` for plain text output
+suitable for scripting.
 
 ### Shell completions
 
@@ -184,22 +184,11 @@ callrx completions powershell >> $PROFILE
 
 ## Data source
 
-Data comes from [callook.info](https://callook.info), which mirrors the FCC Universal
-Licensing System (ULS) and updates weekly. callook.info is not affiliated with the ARRL
-or the FCC — it is an independent service.
+Data is served by **callrx-service**, a REST API over the official [FCC Universal
+Licensing System (ULS)](https://wireless2.fcc.gov/UlsApp/UlsSearch/searchLicense.jsp)
+amateur radio database. The service is refreshed weekly from the FCC bulk download.
 
 For the authoritative FCC record, click the **ULS Record** link in the output.
-
-### Thanks to callook.info
-
-`callrx` would not exist without [callook.info](https://callook.info) and its clean,
-free JSON API. It is built and maintained by **Josh Dick**
-([W1JDD](https://callook.info/w1jdd), [joshdick.net](https://joshdick.net)) as a
-service to the ham radio community.
-
-If `callrx` is useful to you, please consider
-[**donating to callook.info**](https://callook.info/donate/) to help Josh cover
-hosting costs and keep the service running. 73!
 
 ---
 
@@ -221,6 +210,18 @@ Links degrade gracefully to plain text in unsupported terminals or when output i
 ## Development
 
 Requires the stable [Rust](https://rustup.rs) toolchain (pinned in `rust-toolchain.toml`).
+
+### Backend configuration
+
+`callrx` talks to a [callrx-service](https://github.com/binarynoir/callrx-service)
+backend. The endpoint is resolved at runtime from the `CALLRX_API_URL` environment
+variable, falling back to the URL baked in at build time, and finally to
+`http://localhost:8073`.
+
+For local development, copy `env-sample` to `.env` and point `CALLRX_API_URL` at
+your running service — `.env` is loaded automatically in debug builds (`cargo run`).
+Release binaries get their default endpoint from the `CALLRX_API_URL` GitHub Actions
+secret, baked in at compile time, so installed binaries work without any setup.
 
 ```bash
 # Build
@@ -283,6 +284,9 @@ a `v*` tag directly.
 >   with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
 >   `update-homebrew.yml` workflow uses it to commit the regenerated formula to
 >   the tap. The default `GITHUB_TOKEN` cannot write to another repository.
+> - Add a `CALLRX_API_URL` repo secret: the production callrx-service endpoint
+>   (e.g. `https://api.example.com`). The **Release** workflow bakes it into the
+>   binaries at compile time so installed copies point at the live service.
 
 ---
 

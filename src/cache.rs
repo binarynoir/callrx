@@ -3,14 +3,17 @@ use rusqlite::{Connection, OptionalExtension, params};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::api::{
-    AddressInfo, CallsignRecord, CurrentInfo, LocationInfo, OtherInfo, PreviousInfo, TrusteeInfo,
-};
+use crate::api::{AddressInfo, CallsignRecord};
 
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
-/// Cache TTL: 7 days, matching callook.info's weekly FCC bulk-data sync.
+/// Cache TTL: 7 days, matching the FCC's weekly ULS bulk-data publication.
 pub const TTL_SECS: u64 = 7 * 24 * 60 * 60;
+
+/// Maps an empty string to `None` so blank API fields are stored as SQL NULL.
+fn nonempty(s: Option<&str>) -> Option<&str> {
+    s.filter(|v| !v.is_empty())
+}
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -52,30 +55,35 @@ fn apply_schema(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
+    // The callsigns table is a disposable cache of API responses. Its columns
+    // changed when the backend moved from callook.info to callrx-service, so on
+    // any upgrade we drop and recreate it. lookup_history carries no record data
+    // and is preserved across the migration.
     conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS callsigns (
-             id               INTEGER PRIMARY KEY,
-             callsign         TEXT    NOT NULL UNIQUE,
-             status           TEXT    NOT NULL,
-             license_type     TEXT,
-             oper_class       TEXT,
-             prev_callsign    TEXT,
-             prev_oper_class  TEXT,
-             trustee_callsign TEXT,
-             trustee_name     TEXT,
-             name             TEXT,
-             addr_line1       TEXT,
-             addr_line2       TEXT,
-             addr_attn        TEXT,
-             latitude         TEXT,
-             longitude        TEXT,
-             gridsquare       TEXT,
-             grant_date       TEXT,
-             expiry_date      TEXT,
-             last_action_date TEXT,
-             frn              TEXT,
-             uls_url          TEXT,
-             cached_at        INTEGER NOT NULL
+        "DROP TABLE IF EXISTS callsigns;
+
+         CREATE TABLE callsigns (
+             id                    INTEGER PRIMARY KEY,
+             callsign              TEXT    NOT NULL UNIQUE,
+             display_name          TEXT    NOT NULL,
+             license_type          TEXT,
+             license_status        TEXT    NOT NULL,
+             license_status_label  TEXT    NOT NULL,
+             operator_class_label  TEXT,
+             previous_callsign     TEXT,
+             trustee_callsign      TEXT,
+             trustee_name          TEXT,
+             street                TEXT,
+             city                  TEXT,
+             state                 TEXT,
+             zip_code              TEXT,
+             po_box                TEXT,
+             frn                   TEXT,
+             grant_date            TEXT,
+             expired_date          TEXT,
+             last_action_date      TEXT,
+             uls_url               TEXT,
+             cached_at             INTEGER NOT NULL
          );
 
          CREATE TABLE IF NOT EXISTS lookup_history (
@@ -101,73 +109,59 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
     let min_age = now_secs().saturating_sub(TTL_SECS);
 
     conn.query_row(
-        "SELECT status, license_type, oper_class,
-                prev_callsign, prev_oper_class,
+        "SELECT display_name, license_type, license_status, license_status_label,
+                operator_class_label, previous_callsign,
                 trustee_callsign, trustee_name,
-                name,
-                addr_line1, addr_line2, addr_attn,
-                latitude, longitude, gridsquare,
-                grant_date, expiry_date, last_action_date, frn, uls_url,
+                street, city, state, zip_code, po_box,
+                frn, grant_date, expired_date, last_action_date, uls_url,
                 cached_at
          FROM   callsigns
          WHERE  callsign = ?1 AND cached_at >= ?2",
         params![callsign, min_age as i64],
         |row| {
-            let status: String = row.get(0)?;
+            let display_name: String = row.get(0)?;
             let license_type: Option<String> = row.get(1)?;
-            let oper_class: Option<String> = row.get(2)?;
-            let prev_callsign: Option<String> = row.get(3)?;
-            let prev_oper_class: Option<String> = row.get(4)?;
-            let trustee_callsign: Option<String> = row.get(5)?;
-            let trustee_name: Option<String> = row.get(6)?;
-            let name: Option<String> = row.get(7)?;
-            let addr_line1: Option<String> = row.get(8)?;
-            let addr_line2: Option<String> = row.get(9)?;
-            let addr_attn: Option<String> = row.get(10)?;
-            let latitude: Option<String> = row.get(11)?;
-            let longitude: Option<String> = row.get(12)?;
-            let gridsquare: Option<String> = row.get(13)?;
+            let license_status: String = row.get(2)?;
+            let license_status_label: String = row.get(3)?;
+            let operator_class_label: Option<String> = row.get(4)?;
+            let previous_callsign: Option<String> = row.get(5)?;
+            let trustee_callsign: Option<String> = row.get(6)?;
+            let trustee_name: Option<String> = row.get(7)?;
+            let street: Option<String> = row.get(8)?;
+            let city: Option<String> = row.get(9)?;
+            let state: Option<String> = row.get(10)?;
+            let zip_code: Option<String> = row.get(11)?;
+            let po_box: Option<String> = row.get(12)?;
+            let frn: Option<String> = row.get(13)?;
             let grant_date: Option<String> = row.get(14)?;
-            let expiry_date: Option<String> = row.get(15)?;
+            let expired_date: Option<String> = row.get(15)?;
             let last_action_date: Option<String> = row.get(16)?;
-            let frn: Option<String> = row.get(17)?;
-            let uls_url: Option<String> = row.get(18)?;
-            let cached_at: i64 = row.get(19)?;
+            let uls_url: Option<String> = row.get(17)?;
+            let cached_at: i64 = row.get(18)?;
 
             Ok((
                 CallsignRecord {
-                    status,
+                    call_sign: Some(callsign.to_string()),
+                    display_name,
                     license_type,
-                    current: Some(CurrentInfo {
-                        callsign: Some(callsign.to_string()),
-                        oper_class,
-                    }),
-                    previous: prev_callsign.map(|c| PreviousInfo {
-                        callsign: Some(c),
-                        oper_class: prev_oper_class,
-                    }),
-                    trustee: trustee_callsign.map(|c| TrusteeInfo {
-                        callsign: Some(c),
-                        name: trustee_name,
-                    }),
-                    name,
-                    address: Some(AddressInfo {
-                        line1: addr_line1,
-                        line2: addr_line2,
-                        attn: addr_attn,
-                    }),
-                    location: Some(LocationInfo {
-                        latitude,
-                        longitude,
-                        gridsquare,
-                    }),
-                    other_info: Some(OtherInfo {
-                        grant_date,
-                        expiry_date,
-                        last_action_date,
-                        frn,
-                        uls_url,
-                    }),
+                    license_status,
+                    license_status_label,
+                    operator_class_label,
+                    previous_callsign,
+                    trustee_callsign,
+                    trustee_name,
+                    address: AddressInfo {
+                        street,
+                        city,
+                        state,
+                        zip_code,
+                        po_box,
+                    },
+                    frn,
+                    grant_date,
+                    expired_date,
+                    last_action_date,
+                    uls_url,
                 },
                 cached_at as u64,
             ))
@@ -182,70 +176,57 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
 pub fn store(conn: &Connection, record: &CallsignRecord) -> Result<()> {
     let callsign = record.callsign();
     let now = now_secs() as i64;
-    let current = record.current.as_ref();
-    let prev = record.previous.as_ref();
-    let trustee = record.trustee.as_ref();
-    let addr = record.address.as_ref();
-    let loc = record.location.as_ref();
-    let info = record.other_info.as_ref();
+    let addr = &record.address;
 
     conn.execute(
         "INSERT INTO callsigns (
-             callsign, status, license_type, oper_class,
-             prev_callsign, prev_oper_class, trustee_callsign, trustee_name, name,
-             addr_line1, addr_line2, addr_attn, latitude, longitude, gridsquare,
-             grant_date, expiry_date, last_action_date, frn, uls_url, cached_at
+             callsign, display_name, license_type, license_status, license_status_label,
+             operator_class_label, previous_callsign, trustee_callsign, trustee_name,
+             street, city, state, zip_code, po_box,
+             frn, grant_date, expired_date, last_action_date, uls_url, cached_at
          ) VALUES (
-             ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21
+             ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20
          )
          ON CONFLICT(callsign) DO UPDATE SET
-             status           = excluded.status,
-             license_type     = excluded.license_type,
-             oper_class       = excluded.oper_class,
-             prev_callsign    = excluded.prev_callsign,
-             prev_oper_class  = excluded.prev_oper_class,
-             trustee_callsign = excluded.trustee_callsign,
-             trustee_name     = excluded.trustee_name,
-             name             = excluded.name,
-             addr_line1       = excluded.addr_line1,
-             addr_line2       = excluded.addr_line2,
-             addr_attn        = excluded.addr_attn,
-             latitude         = excluded.latitude,
-             longitude        = excluded.longitude,
-             gridsquare       = excluded.gridsquare,
-             grant_date       = excluded.grant_date,
-             expiry_date      = excluded.expiry_date,
-             last_action_date = excluded.last_action_date,
-             frn              = excluded.frn,
-             uls_url          = excluded.uls_url,
-             cached_at        = excluded.cached_at",
+             display_name         = excluded.display_name,
+             license_type         = excluded.license_type,
+             license_status       = excluded.license_status,
+             license_status_label = excluded.license_status_label,
+             operator_class_label = excluded.operator_class_label,
+             previous_callsign    = excluded.previous_callsign,
+             trustee_callsign     = excluded.trustee_callsign,
+             trustee_name         = excluded.trustee_name,
+             street               = excluded.street,
+             city                 = excluded.city,
+             state                = excluded.state,
+             zip_code             = excluded.zip_code,
+             po_box               = excluded.po_box,
+             frn                  = excluded.frn,
+             grant_date           = excluded.grant_date,
+             expired_date         = excluded.expired_date,
+             last_action_date     = excluded.last_action_date,
+             uls_url              = excluded.uls_url,
+             cached_at            = excluded.cached_at",
         params![
             callsign,
-            &record.status,
+            &record.display_name,
             record.license_type.as_deref(),
-            current.and_then(|c| c.oper_class.as_deref()),
-            prev.and_then(|p| p.callsign.as_deref())
-                .filter(|s| !s.is_empty()),
-            prev.and_then(|p| p.oper_class.as_deref())
-                .filter(|s| !s.is_empty()),
-            trustee
-                .and_then(|t| t.callsign.as_deref())
-                .filter(|s| !s.is_empty()),
-            trustee
-                .and_then(|t| t.name.as_deref())
-                .filter(|s| !s.is_empty()),
-            record.name.as_deref(),
-            addr.and_then(|a| a.line1.as_deref()),
-            addr.and_then(|a| a.line2.as_deref()),
-            addr.and_then(|a| a.attn.as_deref()),
-            loc.and_then(|l| l.latitude.as_deref()),
-            loc.and_then(|l| l.longitude.as_deref()),
-            loc.and_then(|l| l.gridsquare.as_deref()),
-            info.and_then(|i| i.grant_date.as_deref()),
-            info.and_then(|i| i.expiry_date.as_deref()),
-            info.and_then(|i| i.last_action_date.as_deref()),
-            info.and_then(|i| i.frn.as_deref()),
-            info.and_then(|i| i.uls_url.as_deref()),
+            &record.license_status,
+            &record.license_status_label,
+            record.operator_class_label.as_deref(),
+            nonempty(record.previous_callsign.as_deref()),
+            nonempty(record.trustee_callsign.as_deref()),
+            nonempty(record.trustee_name.as_deref()),
+            nonempty(addr.street.as_deref()),
+            nonempty(addr.city.as_deref()),
+            nonempty(addr.state.as_deref()),
+            nonempty(addr.zip_code.as_deref()),
+            nonempty(addr.po_box.as_deref()),
+            nonempty(record.frn.as_deref()),
+            nonempty(record.grant_date.as_deref()),
+            nonempty(record.expired_date.as_deref()),
+            nonempty(record.last_action_date.as_deref()),
+            nonempty(record.uls_url.as_deref()),
             now,
         ],
     )?;
@@ -287,10 +268,7 @@ pub fn get_history(conn: &Connection, callsign: &str) -> Vec<(u64, String)> {
 #[cfg(test)]
 mod tests {
     use super::{SCHEMA_VERSION, TTL_SECS, apply_schema, get, now_secs, record_lookup, store};
-    use crate::api::{
-        AddressInfo, CallsignRecord, CurrentInfo, LocationInfo, OtherInfo, PreviousInfo,
-        TrusteeInfo,
-    };
+    use crate::api::{AddressInfo, CallsignRecord};
     use rusqlite::Connection;
 
     fn make_conn() -> Connection {
@@ -301,32 +279,27 @@ mod tests {
 
     fn sample_record(callsign: &str) -> CallsignRecord {
         CallsignRecord {
-            status: "VALID".to_string(),
-            license_type: Some("INDIVIDUAL".to_string()),
-            current: Some(CurrentInfo {
-                callsign: Some(callsign.to_string()),
-                oper_class: Some("EXTRA".to_string()),
-            }),
-            previous: None,
-            trustee: None,
-            name: Some("TEST OPERATOR".to_string()),
-            address: Some(AddressInfo {
-                line1: Some("123 MAIN ST".to_string()),
-                line2: Some("ANYTOWN, ST 00000".to_string()),
-                attn: None,
-            }),
-            location: Some(LocationInfo {
-                latitude: Some("40.0".to_string()),
-                longitude: Some("-74.0".to_string()),
-                gridsquare: Some("FN20".to_string()),
-            }),
-            other_info: Some(OtherInfo {
-                grant_date: Some("01/01/2020".to_string()),
-                expiry_date: Some("01/01/2030".to_string()),
-                last_action_date: Some("01/01/2020".to_string()),
-                frn: Some("1234567890".to_string()),
-                uls_url: Some("http://example.com".to_string()),
-            }),
+            call_sign: Some(callsign.to_string()),
+            display_name: "TEST OPERATOR".to_string(),
+            license_type: Some("Individual".to_string()),
+            license_status: "A".to_string(),
+            license_status_label: "Active".to_string(),
+            operator_class_label: Some("Amateur Extra".to_string()),
+            previous_callsign: None,
+            trustee_callsign: None,
+            trustee_name: None,
+            address: AddressInfo {
+                street: Some("123 MAIN ST".to_string()),
+                city: Some("ANYTOWN".to_string()),
+                state: Some("ST".to_string()),
+                zip_code: Some("00000".to_string()),
+                po_box: None,
+            },
+            frn: Some("1234567890".to_string()),
+            grant_date: Some("2020-01-01".to_string()),
+            expired_date: Some("2030-01-01".to_string()),
+            last_action_date: Some("2020-01-01".to_string()),
+            uls_url: Some("http://example.com".to_string()),
         }
     }
 
@@ -361,22 +334,13 @@ mod tests {
         store(&conn, &sample_record("W1AW")).unwrap();
 
         let (rec, _) = get(&conn, "W1AW").unwrap();
-        assert_eq!(rec.status, "VALID");
+        assert_eq!(rec.license_status_label, "Active");
         assert_eq!(rec.callsign(), "W1AW");
         assert_eq!(rec.license_class_label(), "Amateur Extra");
-        assert_eq!(rec.name.as_deref(), Some("TEST OPERATOR"));
-        assert_eq!(
-            rec.address.as_ref().and_then(|a| a.line1.as_deref()),
-            Some("123 MAIN ST")
-        );
-        assert_eq!(
-            rec.location.as_ref().and_then(|l| l.gridsquare.as_deref()),
-            Some("FN20")
-        );
-        assert_eq!(
-            rec.other_info.as_ref().and_then(|i| i.frn.as_deref()),
-            Some("1234567890")
-        );
+        assert_eq!(rec.display_name, "TEST OPERATOR");
+        assert_eq!(rec.address.street.as_deref(), Some("123 MAIN ST"));
+        assert_eq!(rec.address.city.as_deref(), Some("ANYTOWN"));
+        assert_eq!(rec.frn.as_deref(), Some("1234567890"));
     }
 
     #[test]
@@ -428,7 +392,7 @@ mod tests {
         store(&conn, &sample_record("W1AW")).unwrap();
 
         let mut updated = sample_record("W1AW");
-        updated.name = Some("UPDATED NAME".to_string());
+        updated.display_name = "UPDATED NAME".to_string();
         store(&conn, &updated).unwrap();
 
         let count: i64 = conn
@@ -441,79 +405,65 @@ mod tests {
         assert_eq!(count, 1);
 
         let (rec, _) = get(&conn, "W1AW").unwrap();
-        assert_eq!(rec.name.as_deref(), Some("UPDATED NAME"));
+        assert_eq!(rec.display_name, "UPDATED NAME");
     }
 
     #[test]
     fn store_handles_all_none_optional_fields() {
         let conn = make_conn();
         let minimal = CallsignRecord {
-            status: "VALID".to_string(),
+            call_sign: Some("W1AW".to_string()),
+            display_name: "MINIMAL".to_string(),
             license_type: None,
-            current: Some(CurrentInfo {
-                callsign: Some("W1AW".to_string()),
-                oper_class: None,
-            }),
-            previous: None,
-            trustee: None,
-            name: None,
-            address: None,
-            location: None,
-            other_info: None,
-        };
+            license_status: "A".to_string(),
+            license_status_label: "Active".to_string(),
+            operator_class_label: None,
+            previous_callsign: None,
+            trustee_callsign: None,
+            trustee_name: None,
+            address: AddressInfo::default(),
+            frn: None,
+            grant_date: None,
+            expired_date: None,
+            last_action_date: None,
+            uls_url: None,
+        }; // GMRS / club / pending records may omit most fields
         store(&conn, &minimal).unwrap();
 
         let (rec, _) = get(&conn, "W1AW").unwrap();
-        assert_eq!(rec.status, "VALID");
-        assert!(rec.name.is_none());
+        assert_eq!(rec.display_name, "MINIMAL");
         assert!(rec.license_type.is_none());
-        assert!(rec.previous.is_none());
-        assert!(rec.trustee.is_none());
-        assert!(
-            rec.address
-                .as_ref()
-                .and_then(|a| a.line1.as_deref())
-                .is_none()
-        );
+        assert!(rec.operator_class_label.is_none());
+        assert!(rec.previous_callsign.is_none());
+        assert!(rec.trustee_callsign.is_none());
+        assert!(rec.address.street.is_none());
     }
 
     #[test]
     fn previous_and_trustee_round_trip() {
         let conn = make_conn();
         let mut rec = sample_record("W1AW");
-        rec.previous = Some(PreviousInfo {
-            callsign: Some("KA1ABC".to_string()),
-            oper_class: Some("GENERAL".to_string()),
-        });
-        rec.trustee = Some(TrusteeInfo {
-            callsign: Some("K1ZZ".to_string()),
-            name: Some("SUMNER, DAVID G".to_string()),
-        });
+        rec.previous_callsign = Some("KA1ABC".to_string());
+        rec.trustee_callsign = Some("K1ZZ".to_string());
+        rec.trustee_name = Some("SUMNER, DAVID G".to_string());
         store(&conn, &rec).unwrap();
 
         let (got, _) = get(&conn, "W1AW").unwrap();
-        let prev = got.previous.as_ref().unwrap();
-        assert_eq!(prev.callsign.as_deref(), Some("KA1ABC"));
-        assert_eq!(prev.oper_class.as_deref(), Some("GENERAL"));
-
-        let trustee = got.trustee.as_ref().unwrap();
-        assert_eq!(trustee.callsign.as_deref(), Some("K1ZZ"));
-        assert_eq!(trustee.name.as_deref(), Some("SUMNER, DAVID G"));
+        assert_eq!(got.previous_callsign.as_deref(), Some("KA1ABC"));
+        assert_eq!(got.trustee_callsign.as_deref(), Some("K1ZZ"));
+        assert_eq!(got.trustee_name.as_deref(), Some("SUMNER, DAVID G"));
     }
 
     #[test]
     fn empty_string_previous_callsign_is_stored_as_none() {
         let conn = make_conn();
         let mut rec = sample_record("W1AW");
-        rec.previous = Some(PreviousInfo {
-            callsign: Some(String::new()),
-            oper_class: Some(String::new()),
-        });
+        rec.previous_callsign = Some(String::new());
         store(&conn, &rec).unwrap();
 
         // Empty strings are filtered before storage; previous comes back as None.
         let (got, _) = get(&conn, "W1AW").unwrap();
-        assert!(got.previous.is_none());
+        assert!(got.previous_callsign.is_none());
     }
 
     #[test]

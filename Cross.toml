@@ -1,0 +1,6 @@
+# cross runs cargo inside a Docker container for the ARM Linux targets, which
+# does not inherit the host environment by default. Pass CALLRX_API_URL through
+# so the release endpoint (a GitHub secret) gets baked into cross-compiled
+# binaries via option_env!, exactly as it is for native builds.
+[build.env]
+passthrough = ["CALLRX_API_URL"]

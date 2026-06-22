@@ -1,1 +1,6 @@
 CALLRX_CACHE_DIR=target/cache
+
+# Base URL of the callrx-service backend. In debug builds (cargo run) this is
+# loaded from .env and overrides the URL baked into release binaries. Point it at
+# your local or dev service.
+CALLRX_API_URL=http://localhost:8073

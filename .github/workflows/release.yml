@@ -99,14 +99,20 @@ jobs:
         if: matrix.use_cross == true
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      # Build with cross (ARM) or native cargo (everything else)
+      # Build with cross (ARM) or native cargo (everything else).
+      # CALLRX_API_URL is baked into the binary at compile time via option_env!.
+      # For cross builds it reaches the build container via Cross.toml passthrough.
       - name: Build (cross)
         if: matrix.use_cross == true
         run: cross build --release --locked --target ${{ matrix.target }}
+        env:
+          CALLRX_API_URL: ${{ secrets.CALLRX_API_URL }}
 
       - name: Build (native)
         if: matrix.use_cross != true
         run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          CALLRX_API_URL: ${{ secrets.CALLRX_API_URL }}
 
       # ── Package the binary ───────────────────────────────────────────────
 

@@ -32,7 +32,8 @@ session starts with accurate, complete knowledge of the codebase.
 ## What this project is
 
 `callrx` is a cross-platform CLI tool for looking up amateur radio callsigns from
-the FCC Universal Licensing System (ULS) database via the **callook.info** API.
+the FCC Universal Licensing System (ULS) database via the **callrx-service** REST
+API (the backend counterpart in `binarynoir/callrx-service`).
 
 Target users: ham radio operators, contest loggers, DX hunters, club trustees.
 
@@ -60,7 +61,9 @@ Target users: ham radio operators, contest loggers, DX hunters, club trustees.
 callrx/
 ├── src/
 │   ├── main.rs          — CLI definition (clap), entry point, routing
-│   ├── api.rs           — callook.info HTTP client, response types (serde)
+│   ├── api.rs           — callrx-service HTTP client, response types (serde)
+│   ├── cache.rs         — local SQLite cache + lookup history (rusqlite)
+│   ├── config.rs        — resolves the callrx-service base URL (CALLRX_API_URL)
 │   ├── display.rs       — pretty table output, plain text, error output, spinner
 │   └── hyperlink.rs     — OSC 8 terminal hyperlink helper + support detection
 ├── man/
@@ -77,6 +80,8 @@ callrx/
 │   └── workflows/update-homebrew.yml — regenerates the Homebrew tap formula on release
 ├── Cargo.toml
 ├── Cargo.lock           — committed (this is a binary, not a library)
+├── Cross.toml           — passes CALLRX_API_URL into the ARM cross build container
+├── env-sample           — template for .env (CALLRX_API_URL, CALLRX_CACHE_DIR)
 ├── rust-toolchain.toml  — pins stable channel + rustfmt + clippy + rust-src
 ├── rustfmt.toml         — max_width=100, edition=2021
 ├── .clippy.toml         — pedantic, cognitive complexity threshold
@@ -89,13 +94,26 @@ callrx/
 
 ## Key design decisions
 
-### API source: callook.info, not FCC directly
+### API source: callrx-service
 
-The FCC ULS does not expose a clean JSON REST API — it's a JSP form. callook.info
-mirrors the FCC ULS database and provides a simple JSON endpoint:
-`https://callook.info/{CALLSIGN}/json`
-No auth, no rate limits published. If callook.info is ever unavailable, the
-`api.rs` module is the only file that needs changing.
+The CLI fetches license data from **callrx-service**, our own FastAPI REST API
+over the FCC ULS bulk database. The only endpoint the CLI consumes is
+`GET {base}/callsign/{CALLSIGN}`, which returns a JSON `CallsignResponse` (404 if
+not found, 429 if rate limited). No auth is required. `api.rs` owns the request
+and the response types; it is the only file that needs changing if the backend
+contract changes.
+
+### Endpoint configuration (CALLRX_API_URL)
+
+`config.rs::api_base_url()` resolves the backend base URL in this order:
+
+1. `CALLRX_API_URL` env var at runtime (loaded from `.env` in debug builds by
+   `dotenvy`, so `cargo run` targets the dev service);
+2. `CALLRX_API_URL` baked in at compile time via `option_env!` — the release
+   workflow supplies this from a GitHub secret so the production URL is not
+   committed to the public source tree (and reaches the ARM `cross` containers
+   via `Cross.toml` passthrough);
+3. `http://localhost:8073` fallback (the service's documented dev port).
 
 ### HTTP: sync minreq instead of async request
 
@@ -121,16 +139,17 @@ sequences so the box stays content-sized and aligned whether or not links are on
 
 ### License class decoding
 
-callook.info reports operator class as a full word (`EXTRA`, `ADVANCED`,
-`GENERAL`, `TECHNICIAN`, `NOVICE`). The single-letter FCC codes (E/A/G/T/N) are
-also accepted for robustness. Decoded in
-`api.rs::CallsignRecord::license_class_label()`.
+callrx-service returns the operator class as a ready-made full label
+(`Amateur Extra`, `Advanced`, `General`, `Technician`, `Novice`), so
+`api.rs::CallsignRecord::license_class_label()` returns it verbatim (or `—` for
+club licenses, which carry a trustee instead of an operator class). `display.rs`
+color-matches on those exact strings.
 
 ### Expiry detection
 
-`api.rs::CallsignRecord::is_expired()` does a rough date comparison without
-importing `chrono` — keeps the binary small and avoids a heavy dep for a simple
-display hint. Not used for anything safety-critical.
+`api.rs::CallsignRecord::is_expired()` trusts the FCC license status code
+(`license_status == "E"`) rather than parsing dates — the service already
+exposes the authoritative status. Used only as a display hint (red expiry date).
 
 ### --raw flag
 
@@ -144,36 +163,38 @@ piping to `jq`.
 
 ---
 
-## Data model: callook.info response
+## Data model: callrx-service response
+
+`api.rs::CallsignRecord` deserializes the **subset** of the service's
+`CallsignResponse` that the CLI displays and caches. The service returns more
+fields (email, phone, GMRS `service`, `frn_licenses` siblings, …); `serde`
+ignores anything not declared in the struct. Dates are ISO 8601 (`YYYY-MM-DD`).
+The service does **not** provide grid square or lat/lon — that data is absent
+from the FCC bulk source, so the CLI no longer shows a Grid row.
 
 ```json
 {
-    "status": "VALID", // "VALID" | "INVALID"
-    "type": "CLUB", // "CLUB" | "INDIVIDUAL" | "MILITARY" | etc.
-    "current": {
-        "callsign": "W1AW",
-        "operClass": "EXTRA" // EXTRA | ADVANCED | GENERAL | TECHNICIAN | NOVICE
-    },
-    "previous": { "callsign": "", "operClass": "" },
-    "trustee": { "callsign": "K1ZZ", "name": "SUMNER, DAVID G" },
-    "name": "ARRL HQ OPERATORS CLUB",
+    "call_sign": "W1AW",
+    "display_name": "ARRL HQ OPERATORS CLUB",
+    "license_type": "Club", // "Individual" | "Club"
+    "license_status": "A", // A | C | E | T | L
+    "license_status_label": "Active",
+    "operator_class_label": null, // e.g. "Amateur Extra" for individuals
+    "previous_callsign": null,
+    "trustee_callsign": "K1ZZ",
+    "trustee_name": "SUMNER, DAVID G",
     "address": {
-        "line1": "225 MAIN ST",
-        "line2": "NEWINGTON, CT 06111",
-        "attn": ""
+        "street": "225 MAIN ST",
+        "city": "NEWINGTON",
+        "state": "CT",
+        "zip_code": "06111",
+        "po_box": null
     },
-    "location": {
-        "latitude": "41.714776",
-        "longitude": "-72.726744",
-        "gridsquare": "FN31pr"
-    },
-    "otherInfo": {
-        "grantDate": "12/02/2010",
-        "expiryDate": "02/26/2021",
-        "lastActionDate": "12/02/2010",
-        "frn": "0004511143",
-        "ulsUrl": "http://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey=780866"
-    }
+    "frn": "0004511143",
+    "grant_date": "2010-12-02",
+    "expired_date": "2031-02-26",
+    "last_action_date": "2010-12-02",
+    "uls_url": "https://wireless2.fcc.gov/UlsApp/UlsSearch/license.jsp?licKey=1000001"
 }
 ```
 
@@ -298,13 +319,14 @@ for the submission process.
 
 ## Known limitations
 
-- callook.info only covers **US callsigns** (FCC ULS). It does not cover:
+- The FCC ULS only covers **US callsigns**. It does not cover:
   - Canadian callsigns (Industry Canada)
   - UK callsigns (Ofcom)
   - DX (non-US) callsigns
-- callook.info updates weekly from FCC bulk data — not real-time
-- The expiry check in `api.rs` is approximate (ignores leap years precisely)
-- No caching — every invocation makes an HTTP request
+- callrx-service updates weekly from FCC bulk data — not real-time
+- Grid square / lat-lon are not available (absent from the FCC bulk source)
+- Successful lookups are cached locally for 7 days (`cache.rs`); use `--no-cache`
+  to bypass the read
 
 ---
 
