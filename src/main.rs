@@ -1,5 +1,6 @@
 mod api;
 mod cache;
+mod config;
 mod display;
 mod hyperlink;
 
@@ -8,13 +9,13 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use color_eyre::Result;
 
-/// callrx — Amateur radio callsign lookup (FCC ULS via callook.info)
+/// callrx — Amateur radio callsign lookup (FCC ULS via callrx-service)
 #[derive(Parser, Debug)]
 #[command(
     name = "callrx",
     version,
     about = "Beautiful amateur radio callsign lookup for the terminal",
-    long_about = "Look up FCC ULS amateur radio licenses by callsign.\n\nData is sourced from callook.info, which mirrors the official FCC\nUniversal Licensing System (ULS) database.\n\nSupports clickable links in iTerm2, WezTerm, Windows Terminal, and other\nOSC 8-capable terminals.",
+    long_about = "Look up FCC ULS amateur radio licenses by callsign.\n\nData is served by callrx-service, a REST API over the official FCC\nUniversal Licensing System (ULS) database.\n\nSupports clickable links in iTerm2, WezTerm, Windows Terminal, and other\nOSC 8-capable terminals.",
     after_help = "EXAMPLES:\n  callrx W1AW\n  callrx W1AW --json\n  callrx lookup W1AW --raw"
 )]
 struct Cli {
@@ -56,7 +57,7 @@ enum Commands {
 /// Output options shared by the bare-callsign shorthand and the `lookup` subcommand.
 #[derive(Args, Debug, Default)]
 struct OutputOpts {
-    /// Output raw JSON response from callook.info
+    /// Output the raw JSON response from the callrx-service API
     #[arg(long)]
     json: bool,
 
@@ -68,7 +69,7 @@ struct OutputOpts {
     #[arg(long)]
     no_links: bool,
 
-    /// Bypass the local cache and fetch fresh data from callook.info.
+    /// Bypass the local cache and fetch fresh data from the callrx-service API.
     /// The result is still written to the cache for future lookups.
     #[arg(long)]
     no_cache: bool,

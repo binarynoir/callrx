@@ -1,4 +1,4 @@
-use crate::api::CallsignRecord;
+use crate::api::{AddressInfo, CallsignRecord};
 use crate::cache::TTL_SECS;
 use crate::hyperlink;
 use anstream::{eprintln, println};
@@ -131,7 +131,7 @@ pub fn print_pretty(record: &CallsignRecord, links_enabled: bool, cached_at: Opt
     let use_links = links_enabled && hyperlink::osc8_supported();
 
     let callsign = record.callsign();
-    let name = record.name.as_deref().unwrap_or("—");
+    let name = record.display_name.as_str();
     let rows = build_rows(record, use_links, cached_at);
 
     // ── Render a content-sized box, measuring visible width to stay aligned ─────
@@ -171,6 +171,32 @@ pub fn print_pretty(record: &CallsignRecord, links_enabled: bool, cached_at: Opt
     println!();
 }
 
+/// Composes the "CITY, ST ZIP" address line from the structured address,
+/// returning None when there is nothing to show.
+fn format_city_line(addr: &AddressInfo) -> Option<String> {
+    let city = addr.city.as_deref().unwrap_or("").trim();
+    let state = addr.state.as_deref().unwrap_or("").trim();
+    let zip = addr.zip_code.as_deref().unwrap_or("").trim();
+
+    let mut line = String::new();
+    if !city.is_empty() {
+        line.push_str(city);
+    }
+    if !state.is_empty() {
+        if !line.is_empty() {
+            line.push_str(", ");
+        }
+        line.push_str(state);
+    }
+    if !zip.is_empty() {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(zip);
+    }
+    if line.is_empty() { None } else { Some(line) }
+}
+
 /// Builds the `(label, styled value)` rows shown in the pretty table.
 fn build_rows(
     record: &CallsignRecord,
@@ -180,14 +206,12 @@ fn build_rows(
     let expired = record.is_expired();
     let mut rows: Vec<(&'static str, String)> = Vec::new();
 
-    // Status
-    let status_str = record.status.as_str();
-    let status_val = if status_str == "VALID" && !expired {
-        "✓ VALID".bright_green().bold().to_string()
-    } else if expired {
-        "✗ EXPIRED".bright_red().bold().to_string()
-    } else {
-        format!("⚠ {status_str}").bright_yellow().bold().to_string()
+    // Status — marker color keyed on the FCC status code, label from the API.
+    let label = record.license_status_label.as_str();
+    let status_val = match record.license_status.as_str() {
+        "A" => format!("✓ {label}").bright_green().bold().to_string(),
+        "E" => format!("✗ {label}").bright_red().bold().to_string(),
+        _ => format!("⚠ {label}").bright_yellow().bold().to_string(),
     };
     rows.push(("Status", status_val));
 
@@ -216,10 +240,8 @@ fn build_rows(
     }
 
     // Trustee (club licenses)
-    if let Some(trustee) = &record.trustee
-        && let Some(tcall) = trustee.callsign.as_deref().filter(|s| !s.is_empty())
-    {
-        let tname = trustee.name.as_deref().unwrap_or("");
+    if let Some(tcall) = record.trustee_callsign.as_deref().filter(|s| !s.is_empty()) {
+        let tname = record.trustee_name.as_deref().unwrap_or("");
         rows.push((
             "Trustee",
             format!("{} — {tname}", tcall.bright_cyan().bold()),
@@ -227,68 +249,50 @@ fn build_rows(
     }
 
     // Previous callsign
-    if let Some(prev) = &record.previous
-        && let Some(pc) = prev.callsign.as_deref().filter(|s| !s.is_empty())
+    if let Some(pc) = record
+        .previous_callsign
+        .as_deref()
+        .filter(|s| !s.is_empty())
     {
         rows.push(("Previous", pc.dimmed().to_string()));
     }
 
     // Address
-    if let Some(addr) = &record.address {
-        if let Some(line1) = addr.line1.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("Address", line1.to_string()));
-        }
-        if let Some(line2) = addr.line2.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("", line2.to_string()));
-        }
-    }
-
-    // Grid square + coordinates
-    if let Some(loc) = &record.location
-        && let Some(grid) = loc.gridsquare.as_deref().filter(|s| !s.is_empty())
+    let addr = &record.address;
+    if let Some(line1) = addr
+        .street
+        .as_deref()
+        .or(addr.po_box.as_deref())
+        .filter(|s| !s.is_empty())
     {
-        let lat = loc.latitude.as_deref().unwrap_or("");
-        let lon = loc.longitude.as_deref().unwrap_or("");
-        let grid_display = if !lat.is_empty() && !lon.is_empty() {
-            let maps_url = format!("https://www.google.com/maps/search/?api=1&query={lat},{lon}");
-            hyperlink::link(&maps_url, &format!("{grid} ({lat}, {lon})"), use_links)
-        } else {
-            grid.to_string()
-        };
-        rows.push(("Grid", grid_display));
+        rows.push(("Address", line1.to_string()));
+    }
+    if let Some(line2) = format_city_line(addr) {
+        rows.push(("", line2));
     }
 
     // Dates and identifiers
-    if let Some(info) = &record.other_info {
-        if let Some(g) = info.grant_date.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("Granted", g.to_string()));
-        }
-        if let Some(e) = info.expiry_date.as_deref().filter(|s| !s.is_empty()) {
-            let expiry_val = if expired {
-                e.bright_red().to_string()
-            } else {
-                e.bright_green().to_string()
-            };
-            rows.push(("Expires", expiry_val));
-        }
-        if let Some(d) = info.last_action_date.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("Last Action", d.dimmed().to_string()));
-        }
-        if let Some(frn) = info.frn.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("FRN", frn.dimmed().to_string()));
-        }
-        // ULS link — clickable if supported
-        if let Some(uls_url) = info.uls_url.as_deref().filter(|s| !s.is_empty()) {
-            rows.push(("ULS Record", hyperlink::link(uls_url, uls_url, use_links)));
-        }
+    if let Some(g) = record.grant_date.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Granted", g.to_string()));
     }
-
-    // Callook.info source link
-    let callook_url = format!("https://callook.info/{}", record.callsign());
-    rows.push((
-        "callook.info",
-        hyperlink::link(&callook_url, &callook_url, use_links),
-    ));
+    if let Some(e) = record.expired_date.as_deref().filter(|s| !s.is_empty()) {
+        let expiry_val = if expired {
+            e.bright_red().to_string()
+        } else {
+            e.bright_green().to_string()
+        };
+        rows.push(("Expires", expiry_val));
+    }
+    if let Some(d) = record.last_action_date.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Last Action", d.dimmed().to_string()));
+    }
+    if let Some(frn) = record.frn.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("FRN", frn.dimmed().to_string()));
+    }
+    // ULS link — clickable if supported
+    if let Some(uls_url) = record.uls_url.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("ULS Record", hyperlink::link(uls_url, uls_url, use_links)));
+    }
 
     if let Some(ca) = cached_at {
         rows.push((
@@ -304,52 +308,41 @@ fn build_rows(
 
 pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
     println!("Callsign:    {}", record.callsign());
-    println!("Status:      {}", record.status);
+    println!("Status:      {}", record.license_status_label);
 
     if let Some(t) = &record.license_type {
         println!("Type:        {t}");
     }
     println!("Class:       {}", record.license_class_label());
 
-    if let Some(name) = &record.name {
-        println!("Name:        {name}");
-    }
+    println!("Name:        {}", record.display_name);
 
-    if let Some(trustee) = &record.trustee
-        && let (Some(tc), Some(tn)) = (&trustee.callsign, &trustee.name)
-        && !tc.is_empty()
-    {
+    if let Some(tc) = record.trustee_callsign.as_deref().filter(|s| !s.is_empty()) {
+        let tn = record.trustee_name.as_deref().unwrap_or("");
         println!("Trustee:     {tn} ({tc})");
     }
 
-    if let Some(addr) = &record.address {
-        if let Some(l1) = &addr.line1 {
-            println!("Address:     {l1}");
-        }
-        if let Some(l2) = &addr.line2 {
-            println!("             {l2}");
-        }
+    let addr = &record.address;
+    if let Some(l1) = addr
+        .street
+        .as_deref()
+        .or(addr.po_box.as_deref())
+        .filter(|s| !s.is_empty())
+    {
+        println!("Address:     {l1}");
+    }
+    if let Some(l2) = format_city_line(addr) {
+        println!("             {l2}");
     }
 
-    if let Some(loc) = &record.location {
-        if let Some(g) = &loc.gridsquare {
-            println!("Grid:        {g}");
-        }
-        if let (Some(lat), Some(lon)) = (&loc.latitude, &loc.longitude) {
-            println!("Coordinates: {lat}, {lon}");
-        }
+    if let Some(g) = record.grant_date.as_deref().filter(|s| !s.is_empty()) {
+        println!("Granted:     {g}");
     }
-
-    if let Some(info) = &record.other_info {
-        if let Some(g) = &info.grant_date {
-            println!("Granted:     {g}");
-        }
-        if let Some(e) = &info.expiry_date {
-            println!("Expires:     {e}");
-        }
-        if let Some(uls) = &info.uls_url {
-            println!("ULS URL:     {uls}");
-        }
+    if let Some(e) = record.expired_date.as_deref().filter(|s| !s.is_empty()) {
+        println!("Expires:     {e}");
+    }
+    if let Some(uls) = record.uls_url.as_deref().filter(|s| !s.is_empty()) {
+        println!("ULS URL:     {uls}");
     }
 
     if let Some(ca) = cached_at {

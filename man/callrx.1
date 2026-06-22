@@ -26,11 +26,11 @@ callrx \- amateur radio callsign lookup via the FCC ULS database
 .B callrx
 is a command-line tool for looking up FCC Universal Licensing System (ULS)
 amateur radio licenses by callsign.
-Data is retrieved from callook.info, which mirrors the official FCC ULS
-database and is updated weekly from FCC bulk data.
+Data is served by callrx-service, a REST API over the official FCC ULS
+database, which is refreshed weekly from FCC bulk data.
 .PP
 Output is a formatted table showing the licensee name, license class,
-address, grid square, trustee (for club licenses), grant and expiry dates,
+address, trustee (for club licenses), grant and expiry dates,
 FCC Registration Number (FRN), and a link to the ULS record.
 In terminals that support OSC 8 hyperlinks (iTerm2, WezTerm, Windows Terminal,
 and others), the ULS URL and FRN are rendered as clickable links.
@@ -49,7 +49,7 @@ This is also the default action when a bare callsign is provided.
 Show every past lookup of the given callsign recorded in the local SQLite
 cache database, most recent first.
 Each entry shows the date and time (UTC), whether the data was fetched live
-from callook.info
+from the callrx-service API
 .RB ( live )
 or served from the local cache
 .RB ( cached ),
@@ -76,7 +76,7 @@ The following options apply to both the bare-callsign form and the
 subcommand.
 .TP
 .B \-\-json
-Print the raw JSON response from callook.info, pretty-printed with
+Print the raw JSON response from the callrx-service API, pretty-printed with
 two-space indentation.
 Useful for piping to
 .BR jq (1)
@@ -112,7 +112,7 @@ Each entry is printed on its own line as
 .IR "DATE TIME  SOURCE  AGE" .
 .TP
 .B \-\-no\-cache
-Bypass the local cache and always fetch fresh data from callook.info.
+Bypass the local cache and always fetch fresh data from the callrx-service API.
 The fresh result is still written to the cache so subsequent lookups
 can be served from it.
 See
@@ -139,7 +139,7 @@ Print plain text without color (for scripts):
 .B callrx W1AW \-\-raw
 .TP
 Extract the operator class with jq:
-.B callrx W1AW \-\-json | jq \-r .current.operClass
+.B callrx W1AW \-\-json | jq \-r .operator_class_label
 .TP
 Disable clickable links in the output:
 .B callrx W1AW \-\-no\-links
@@ -158,7 +158,7 @@ Install bash completions (current session):
 .SH CACHE
 .B callrx
 caches every successful lookup in a local SQLite database for 7 days,
-matching callook.info's weekly FCC bulk-data sync schedule.
+matching the FCC's weekly ULS bulk-data publication schedule.
 Cached lookups are served instantly and display a
 .I "Cached X ago"
 note in the output.
@@ -192,58 +192,63 @@ The callsign was found and its license record was printed successfully.
 .TP
 .B 1
 An error occurred: the callsign was not found in the FCC ULS database,
-a network error occurred while contacting callook.info, or the arguments
-were invalid.
+a network error occurred while contacting the callrx-service API, or the
+arguments were invalid.
 .SH DATA SOURCE
-License data is provided by
-.BR callook.info ,
-a third-party mirror of the FCC Universal Licensing System database
-maintained at \fIhttps://callook.info\fR.
+License data is served by callrx-service, a REST API over the official FCC
+Universal Licensing System (ULS) amateur radio database.
 The database is refreshed weekly from FCC bulk data releases.
-.B callrx
-is not affiliated with callook.info or the FCC.
+The backend endpoint is configured via the
+.B CALLRX_API_URL
+environment variable (see
+.BR ENVIRONMENT ).
 .PP
 FCC license records can also be searched directly at:
 .br
 \fIhttps://wireless2.fcc.gov/UlsApp/UlsSearch/\fR
+.SH ENVIRONMENT
+.TP
+.B CALLRX_API_URL
+Base URL of the callrx-service backend (e.g.
+.IR http://localhost:8073 ).
+Overrides the URL compiled into release binaries; falls back to
+.I http://localhost:8073
+when unset.
+.TP
+.B CALLRX_CACHE_DIR
+Overrides the directory of the local cache database.
 .SH OPERATOR CLASS CODES
-callook.info reports the operator class as a full word.
+The API reports the operator class as both a single-letter FCC code and a
+full label.
 The following classes are recognized:
 .TP
-.B EXTRA
+.B E
 Amateur Extra (highest class)
 .TP
-.B ADVANCED
+.B A
 Advanced
 .TP
-.B GENERAL
+.B G
 General
 .TP
-.B TECHNICIAN
-Technician (or Technician Plus)
+.B T
+Technician
 .TP
-.B NOVICE
+.B N
 Novice
-.PP
-The single-letter FCC codes
-.RB ( E ", " A ", " G ", " T ", " N )
-are also accepted.
 .SH LIMITATIONS
 .IP \(bu 4
 Only US callsigns in the FCC ULS are supported.
 Canadian (Industry Canada), UK (Ofcom), and other DX callsigns are not
-available through callook.info.
+available in the FCC ULS.
 .IP \(bu 4
-License data may be up to one week out of date, as callook.info syncs
-from FCC bulk data on a weekly schedule.
+License data may be up to one week out of date, as the FCC publishes ULS
+bulk data on a weekly schedule.
 .IP \(bu 4
 Lookups are cached locally for 7 days.
 Use
 .B \-\-no\-cache
-to force a fresh fetch from callook.info.
-.IP \(bu 4
-The expired-license indicator uses an approximate date calculation
-(leap years are approximated) and is a display hint only.
+to force a fresh fetch from the callrx-service API.
 .SH AUTHORS
 Written by John Smith III.
 .PP
