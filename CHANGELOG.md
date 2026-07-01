@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/binarynoir/callrx/compare/v0.7.0...v0.8.0) (2026-07-01)
+
+
+### Features
+
+* added all available data to results including options for local weather and neighbor results ([e0a9ed5](https://github.com/binarynoir/callrx/commit/e0a9ed583560150ce17e52cc298206eb6dfda445))
+* migrate to callrx-service api ([bdde1f5](https://github.com/binarynoir/callrx/commit/bdde1f5ff0fbe49a88cd73d25bb75ccaa2e294c1))
+
 ## [0.7.0](https://github.com/binarynoir/callrx/compare/v0.6.0...v0.7.0) (2026-06-11)
 
 
