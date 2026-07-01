@@ -37,6 +37,7 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
       attach_only: true
+    secrets: inherit
 
   # ── Once the binaries are attached to the release, regenerate the formula in
   #    the Homebrew tap so `brew upgrade callrx` picks up the new version. ──
