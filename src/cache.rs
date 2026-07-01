@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::{AddressInfo, CallsignRecord};
 
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 3;
 
 /// Cache TTL: 7 days, matching the FCC's weekly ULS bulk-data publication.
 pub const TTL_SECS: u64 = 7 * 24 * 60 * 60;
@@ -63,27 +63,42 @@ fn apply_schema(conn: &Connection) -> Result<()> {
         "DROP TABLE IF EXISTS callsigns;
 
          CREATE TABLE callsigns (
-             id                    INTEGER PRIMARY KEY,
-             callsign              TEXT    NOT NULL UNIQUE,
-             display_name          TEXT    NOT NULL,
-             license_type          TEXT,
-             license_status        TEXT    NOT NULL,
-             license_status_label  TEXT    NOT NULL,
-             operator_class_label  TEXT,
-             previous_callsign     TEXT,
-             trustee_callsign      TEXT,
-             trustee_name          TEXT,
-             street                TEXT,
-             city                  TEXT,
-             state                 TEXT,
-             zip_code              TEXT,
-             po_box                TEXT,
-             frn                   TEXT,
-             grant_date            TEXT,
-             expired_date          TEXT,
-             last_action_date      TEXT,
-             uls_url               TEXT,
-             cached_at             INTEGER NOT NULL
+             id                            INTEGER PRIMARY KEY,
+             callsign                      TEXT    NOT NULL UNIQUE,
+             unique_system_identifier      INTEGER,
+             display_name                  TEXT    NOT NULL,
+             license_type                  TEXT,
+             license_status                TEXT    NOT NULL,
+             license_status_label          TEXT    NOT NULL,
+             operator_class                TEXT,
+             operator_class_label          TEXT,
+             group_code                    TEXT,
+             region_code                   TEXT,
+             previous_callsign             TEXT,
+             previous_operator_class       TEXT,
+             previous_operator_class_label TEXT,
+             trustee_callsign              TEXT,
+             trustee_name                  TEXT,
+             vanity_call_sign_change       TEXT,
+             vanity_relationship           TEXT,
+             street                        TEXT,
+             city                          TEXT,
+             state                         TEXT,
+             zip_code                      TEXT,
+             po_box                        TEXT,
+             email                         TEXT,
+             phone                         TEXT,
+             frn                           TEXT,
+             grant_date                    TEXT,
+             expired_date                  TEXT,
+             cancellation_date             TEXT,
+             effective_date                TEXT,
+             last_action_date              TEXT,
+             uls_url                       TEXT,
+             service                       TEXT,
+             service_label                 TEXT,
+             frn_licenses_json             TEXT,
+             cached_at                     INTEGER NOT NULL
          );
 
          CREATE TABLE IF NOT EXISTS lookup_history (
@@ -109,47 +124,77 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
     let min_age = now_secs().saturating_sub(TTL_SECS);
 
     conn.query_row(
-        "SELECT display_name, license_type, license_status, license_status_label,
-                operator_class_label, previous_callsign,
-                trustee_callsign, trustee_name,
-                street, city, state, zip_code, po_box,
-                frn, grant_date, expired_date, last_action_date, uls_url,
+        "SELECT unique_system_identifier, display_name, license_type,
+                license_status, license_status_label,
+                operator_class, operator_class_label, group_code, region_code,
+                previous_callsign, previous_operator_class, previous_operator_class_label,
+                trustee_callsign, trustee_name, vanity_call_sign_change, vanity_relationship,
+                street, city, state, zip_code, po_box, email, phone,
+                frn, grant_date, expired_date, cancellation_date, effective_date,
+                last_action_date, uls_url, service, service_label, frn_licenses_json,
                 cached_at
          FROM   callsigns
          WHERE  callsign = ?1 AND cached_at >= ?2",
         params![callsign, min_age as i64],
         |row| {
-            let display_name: String = row.get(0)?;
-            let license_type: Option<String> = row.get(1)?;
-            let license_status: String = row.get(2)?;
-            let license_status_label: String = row.get(3)?;
-            let operator_class_label: Option<String> = row.get(4)?;
-            let previous_callsign: Option<String> = row.get(5)?;
-            let trustee_callsign: Option<String> = row.get(6)?;
-            let trustee_name: Option<String> = row.get(7)?;
-            let street: Option<String> = row.get(8)?;
-            let city: Option<String> = row.get(9)?;
-            let state: Option<String> = row.get(10)?;
-            let zip_code: Option<String> = row.get(11)?;
-            let po_box: Option<String> = row.get(12)?;
-            let frn: Option<String> = row.get(13)?;
-            let grant_date: Option<String> = row.get(14)?;
-            let expired_date: Option<String> = row.get(15)?;
-            let last_action_date: Option<String> = row.get(16)?;
-            let uls_url: Option<String> = row.get(17)?;
-            let cached_at: i64 = row.get(18)?;
+            let unique_system_identifier: Option<i64> = row.get(0)?;
+            let display_name: String = row.get(1)?;
+            let license_type: Option<String> = row.get(2)?;
+            let license_status: String = row.get(3)?;
+            let license_status_label: String = row.get(4)?;
+            let operator_class: Option<String> = row.get(5)?;
+            let operator_class_label: Option<String> = row.get(6)?;
+            let group_code: Option<String> = row.get(7)?;
+            let region_code: Option<String> = row.get(8)?;
+            let previous_callsign: Option<String> = row.get(9)?;
+            let previous_operator_class: Option<String> = row.get(10)?;
+            let previous_operator_class_label: Option<String> = row.get(11)?;
+            let trustee_callsign: Option<String> = row.get(12)?;
+            let trustee_name: Option<String> = row.get(13)?;
+            let vanity_call_sign_change: Option<String> = row.get(14)?;
+            let vanity_relationship: Option<String> = row.get(15)?;
+            let street: Option<String> = row.get(16)?;
+            let city: Option<String> = row.get(17)?;
+            let state: Option<String> = row.get(18)?;
+            let zip_code: Option<String> = row.get(19)?;
+            let po_box: Option<String> = row.get(20)?;
+            let email: Option<String> = row.get(21)?;
+            let phone: Option<String> = row.get(22)?;
+            let frn: Option<String> = row.get(23)?;
+            let grant_date: Option<String> = row.get(24)?;
+            let expired_date: Option<String> = row.get(25)?;
+            let cancellation_date: Option<String> = row.get(26)?;
+            let effective_date: Option<String> = row.get(27)?;
+            let last_action_date: Option<String> = row.get(28)?;
+            let uls_url: Option<String> = row.get(29)?;
+            let service: Option<String> = row.get(30)?;
+            let service_label: Option<String> = row.get(31)?;
+            let frn_licenses_json: Option<String> = row.get(32)?;
+            let cached_at: i64 = row.get(33)?;
+
+            let frn_licenses = frn_licenses_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
 
             Ok((
                 CallsignRecord {
+                    unique_system_identifier,
                     call_sign: Some(callsign.to_string()),
                     display_name,
                     license_type,
                     license_status,
                     license_status_label,
+                    operator_class,
                     operator_class_label,
+                    group_code,
+                    region_code,
                     previous_callsign,
+                    previous_operator_class,
+                    previous_operator_class_label,
                     trustee_callsign,
                     trustee_name,
+                    vanity_call_sign_change,
+                    vanity_relationship,
                     address: AddressInfo {
                         street,
                         city,
@@ -157,11 +202,18 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
                         zip_code,
                         po_box,
                     },
+                    email,
+                    phone,
                     frn,
                     grant_date,
                     expired_date,
+                    cancellation_date,
+                    effective_date,
                     last_action_date,
                     uls_url,
+                    service,
+                    service_label,
+                    frn_licenses,
                 },
                 cached_at as u64,
             ))
@@ -177,56 +229,95 @@ pub fn store(conn: &Connection, record: &CallsignRecord) -> Result<()> {
     let callsign = record.callsign();
     let now = now_secs() as i64;
     let addr = &record.address;
+    let frn_licenses_json = record
+        .frn_licenses
+        .as_ref()
+        .and_then(|v| serde_json::to_string(v).ok());
 
     conn.execute(
         "INSERT INTO callsigns (
-             callsign, display_name, license_type, license_status, license_status_label,
-             operator_class_label, previous_callsign, trustee_callsign, trustee_name,
-             street, city, state, zip_code, po_box,
-             frn, grant_date, expired_date, last_action_date, uls_url, cached_at
+             callsign, unique_system_identifier, display_name, license_type,
+             license_status, license_status_label,
+             operator_class, operator_class_label, group_code, region_code,
+             previous_callsign, previous_operator_class, previous_operator_class_label,
+             trustee_callsign, trustee_name, vanity_call_sign_change, vanity_relationship,
+             street, city, state, zip_code, po_box, email, phone,
+             frn, grant_date, expired_date, cancellation_date, effective_date,
+             last_action_date, uls_url, service, service_label, frn_licenses_json, cached_at
          ) VALUES (
-             ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20
+             ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,
+             ?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35
          )
          ON CONFLICT(callsign) DO UPDATE SET
-             display_name         = excluded.display_name,
-             license_type         = excluded.license_type,
-             license_status       = excluded.license_status,
-             license_status_label = excluded.license_status_label,
-             operator_class_label = excluded.operator_class_label,
-             previous_callsign    = excluded.previous_callsign,
-             trustee_callsign     = excluded.trustee_callsign,
-             trustee_name         = excluded.trustee_name,
-             street               = excluded.street,
-             city                 = excluded.city,
-             state                = excluded.state,
-             zip_code             = excluded.zip_code,
-             po_box               = excluded.po_box,
-             frn                  = excluded.frn,
-             grant_date           = excluded.grant_date,
-             expired_date         = excluded.expired_date,
-             last_action_date     = excluded.last_action_date,
-             uls_url              = excluded.uls_url,
-             cached_at            = excluded.cached_at",
+             unique_system_identifier      = excluded.unique_system_identifier,
+             display_name                  = excluded.display_name,
+             license_type                  = excluded.license_type,
+             license_status                = excluded.license_status,
+             license_status_label          = excluded.license_status_label,
+             operator_class                = excluded.operator_class,
+             operator_class_label          = excluded.operator_class_label,
+             group_code                    = excluded.group_code,
+             region_code                   = excluded.region_code,
+             previous_callsign             = excluded.previous_callsign,
+             previous_operator_class       = excluded.previous_operator_class,
+             previous_operator_class_label = excluded.previous_operator_class_label,
+             trustee_callsign              = excluded.trustee_callsign,
+             trustee_name                  = excluded.trustee_name,
+             vanity_call_sign_change       = excluded.vanity_call_sign_change,
+             vanity_relationship           = excluded.vanity_relationship,
+             street                        = excluded.street,
+             city                          = excluded.city,
+             state                         = excluded.state,
+             zip_code                      = excluded.zip_code,
+             po_box                        = excluded.po_box,
+             email                         = excluded.email,
+             phone                         = excluded.phone,
+             frn                           = excluded.frn,
+             grant_date                    = excluded.grant_date,
+             expired_date                  = excluded.expired_date,
+             cancellation_date             = excluded.cancellation_date,
+             effective_date                = excluded.effective_date,
+             last_action_date              = excluded.last_action_date,
+             uls_url                       = excluded.uls_url,
+             service                       = excluded.service,
+             service_label                 = excluded.service_label,
+             frn_licenses_json             = excluded.frn_licenses_json,
+             cached_at                     = excluded.cached_at",
         params![
             callsign,
+            record.unique_system_identifier,
             &record.display_name,
             record.license_type.as_deref(),
             &record.license_status,
             &record.license_status_label,
+            record.operator_class.as_deref(),
             record.operator_class_label.as_deref(),
+            record.group_code.as_deref(),
+            record.region_code.as_deref(),
             nonempty(record.previous_callsign.as_deref()),
+            record.previous_operator_class.as_deref(),
+            record.previous_operator_class_label.as_deref(),
             nonempty(record.trustee_callsign.as_deref()),
             nonempty(record.trustee_name.as_deref()),
+            record.vanity_call_sign_change.as_deref(),
+            record.vanity_relationship.as_deref(),
             nonempty(addr.street.as_deref()),
             nonempty(addr.city.as_deref()),
             nonempty(addr.state.as_deref()),
             nonempty(addr.zip_code.as_deref()),
             nonempty(addr.po_box.as_deref()),
+            nonempty(record.email.as_deref()),
+            nonempty(record.phone.as_deref()),
             nonempty(record.frn.as_deref()),
             nonempty(record.grant_date.as_deref()),
             nonempty(record.expired_date.as_deref()),
+            nonempty(record.cancellation_date.as_deref()),
+            nonempty(record.effective_date.as_deref()),
             nonempty(record.last_action_date.as_deref()),
             nonempty(record.uls_url.as_deref()),
+            record.service.as_deref(),
+            record.service_label.as_deref(),
+            frn_licenses_json,
             now,
         ],
     )?;
@@ -285,9 +376,6 @@ mod tests {
             license_status: "A".to_string(),
             license_status_label: "Active".to_string(),
             operator_class_label: Some("Amateur Extra".to_string()),
-            previous_callsign: None,
-            trustee_callsign: None,
-            trustee_name: None,
             address: AddressInfo {
                 street: Some("123 MAIN ST".to_string()),
                 city: Some("ANYTOWN".to_string()),
@@ -300,6 +388,7 @@ mod tests {
             expired_date: Some("2030-01-01".to_string()),
             last_action_date: Some("2020-01-01".to_string()),
             uls_url: Some("http://example.com".to_string()),
+            ..Default::default()
         }
     }
 
@@ -414,19 +503,10 @@ mod tests {
         let minimal = CallsignRecord {
             call_sign: Some("W1AW".to_string()),
             display_name: "MINIMAL".to_string(),
-            license_type: None,
             license_status: "A".to_string(),
             license_status_label: "Active".to_string(),
-            operator_class_label: None,
-            previous_callsign: None,
-            trustee_callsign: None,
-            trustee_name: None,
             address: AddressInfo::default(),
-            frn: None,
-            grant_date: None,
-            expired_date: None,
-            last_action_date: None,
-            uls_url: None,
+            ..Default::default()
         }; // GMRS / club / pending records may omit most fields
         store(&conn, &minimal).unwrap();
 

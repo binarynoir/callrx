@@ -1,4 +1,4 @@
-.TH CALLRX 1 "June 2026" "callrx @@VERSION@@" "User Commands"
+.TH CALLRX 1 "July 2026" "callrx @@VERSION@@" "User Commands"
 .SH NAME
 callrx \- amateur radio callsign lookup via the FCC ULS database
 .SH SYNOPSIS
@@ -29,11 +29,15 @@ amateur radio licenses by callsign.
 Data is served by callrx-service, a REST API over the official FCC ULS
 database, which is refreshed weekly from FCC bulk data.
 .PP
-Output is a formatted table showing the licensee name, license class,
-address, trustee (for club licenses), grant and expiry dates,
-FCC Registration Number (FRN), and a link to the ULS record.
+Output is a formatted table showing the licensee name, radio service
+(Amateur Radio or GMRS), license class, call group and district, address,
+trustee (for club licenses), previous callsign and operator class, vanity
+assignment info, contact email and phone, grant/effective/expiry/cancellation
+dates, FCC Registration Number (FRN), unique system identifier (USI), any
+other licenses held by the same FRN registrant, local time at the licensee's
+mailing address, and a link to the ULS record.
 In terminals that support OSC 8 hyperlinks (iTerm2, WezTerm, Windows Terminal,
-and others), the ULS URL and FRN are rendered as clickable links.
+and others), the ULS URL is rendered as a clickable link.
 .PP
 A bare callsign argument with no subcommand is treated as shorthand for
 .BR "callrx lookup" .
@@ -119,6 +123,25 @@ See
 .B CACHE
 below.
 .TP
+.B \-\-weather
+Show current weather conditions at the licensee's mailing address
+(temperature, conditions, humidity, wind).
+Weather is returned by the same lookup used for local time, which is always
+performed, so this flag adds no extra network request; it only controls
+whether the weather is displayed.
+See
+.B LOCATION DATA
+below.
+.TP
+.B \-\-neighbors
+Show other active licensees near the same mailing address, split into two
+groups: licensees at the exact same street address, and licensees elsewhere
+on the same street.
+This makes one additional, uncached API request.
+See
+.B LOCATION DATA
+below.
+.TP
 .B \-h ", " \-\-help
 Print help information and exit.
 .TP
@@ -143,6 +166,12 @@ Extract the operator class with jq:
 .TP
 Disable clickable links in the output:
 .B callrx W1AW \-\-no\-links
+.TP
+Show current weather at the licensee's mailing address:
+.B callrx W1AW \-\-weather
+.TP
+Show other licensees near the same mailing address:
+.B callrx W1AW \-\-neighbors
 .TP
 Show lookup history for a callsign:
 .B callrx history W1AW
@@ -185,6 +214,34 @@ Every lookup (cached or live) is recorded in the
 .I lookup_history
 table for use by
 .BR "callrx history" .
+.PP
+Local time, weather, and neighbor data (see
+.B LOCATION DATA
+below) are never cached and are re-fetched on every lookup, including cache
+hits on the license record itself.
+.SH LOCATION DATA
+The licensee's mailing address cannot be converted to a local time without
+geocoding, which is performed server-side by callrx-service.
+Because of this,
+.B callrx
+fetches local time on
+.I every
+lookup (a small, uncached API request) and displays it as part of the
+standard license record.
+.PP
+Current weather conditions are returned by that same request at no extra
+cost, but are only displayed when
+.B \-\-weather
+is given.
+.PP
+.B \-\-neighbors
+makes one additional, uncached API request to find other active licensees at
+the same street address and elsewhere on the same street.
+.PP
+All three failure modes degrade gracefully: if the location lookup or
+neighbors request fails (e.g. the address could not be geocoded, or a
+network error), the core license record is still printed and the affected
+section is simply omitted.
 .SH EXIT STATUS
 .TP
 .B 0

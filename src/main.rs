@@ -16,7 +16,7 @@ use color_eyre::Result;
     version,
     about = "Beautiful amateur radio callsign lookup for the terminal",
     long_about = "Look up FCC ULS amateur radio licenses by callsign.\n\nData is served by callrx-service, a REST API over the official FCC\nUniversal Licensing System (ULS) database.\n\nSupports clickable links in iTerm2, WezTerm, Windows Terminal, and other\nOSC 8-capable terminals.",
-    after_help = "EXAMPLES:\n  callrx W1AW\n  callrx W1AW --json\n  callrx lookup W1AW --raw"
+    after_help = "EXAMPLES:\n  callrx W1AW\n  callrx W1AW --json\n  callrx W1AW --weather --neighbors\n  callrx lookup W1AW --raw"
 )]
 struct Cli {
     /// Callsign to look up (shorthand — same as `callrx lookup <CALLSIGN>`)
@@ -73,6 +73,17 @@ struct OutputOpts {
     /// The result is still written to the cache for future lookups.
     #[arg(long)]
     no_cache: bool,
+
+    /// Show current weather at the licensee's mailing address. Reuses the same
+    /// lookup as local time (always fetched), so this adds no extra API call —
+    /// it just displays the weather that comes back with it.
+    #[arg(long)]
+    weather: bool,
+
+    /// Show other active licensees near the same mailing address (address and
+    /// street). One extra API call; never cached.
+    #[arg(long)]
+    neighbors: bool,
 }
 
 fn main() -> Result<()> {
@@ -162,12 +173,65 @@ fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
         let _ = cache::record_lookup(conn, &callsign, source);
     }
 
-    if opts.json {
-        println!("{}", serde_json::to_string_pretty(&record)?);
-    } else if opts.raw {
-        display::print_plain(&record, cached_at);
+    // Local time can't be derived without geocoding the mailing address, so
+    // it's core: fetched on every lookup (best-effort — a failure here
+    // shouldn't hide the record that already succeeded). It's never cached,
+    // since time changes on every call. Weather comes back in the same
+    // response at no extra cost; --weather only controls whether it's shown.
+    let location_info = record.call_sign.as_deref().and_then(|cs| {
+        let spinner = display::make_spinner("Fetching local time…");
+        let result = api::lookup_location_info(cs).ok();
+        spinner.finish_and_clear();
+        result
+    });
+    let local_time = location_info.as_ref().and_then(|l| l.time.as_ref());
+    let weather = opts
+        .weather
+        .then(|| location_info.as_ref().and_then(|l| l.weather.as_ref()))
+        .flatten();
+
+    // --neighbors is a separate, opt-in API call; also never cached.
+    let neighbors = if opts.neighbors {
+        record.call_sign.as_deref().and_then(|cs| {
+            let spinner = display::make_spinner("Fetching neighbors…");
+            let result = api::lookup_neighbors(cs).ok();
+            spinner.finish_and_clear();
+            result
+        })
     } else {
-        display::print_pretty(&record, !opts.no_links, cached_at);
+        None
+    };
+
+    if opts.json {
+        let mut value = serde_json::to_value(&record)?;
+        if let Some(map) = value.as_object_mut() {
+            if let Some(time) = local_time {
+                map.insert("local_time".to_string(), serde_json::to_value(time)?);
+            }
+            if let Some(w) = weather {
+                map.insert("weather".to_string(), serde_json::to_value(w)?);
+            }
+            if let Some(n) = &neighbors {
+                map.insert("neighbors".to_string(), serde_json::to_value(n)?);
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
+    } else if opts.raw {
+        display::print_plain(&record, cached_at, local_time);
+        if let Some(w) = weather {
+            display::print_weather_plain(w);
+        }
+        if let Some(n) = &neighbors {
+            display::print_neighbors_plain(n);
+        }
+    } else {
+        display::print_pretty(&record, !opts.no_links, cached_at, local_time);
+        if let Some(w) = weather {
+            display::print_weather(w);
+        }
+        if let Some(n) = &neighbors {
+            display::print_neighbors(n);
+        }
     }
 
     Ok(())
