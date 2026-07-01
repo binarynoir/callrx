@@ -89,6 +89,8 @@ OPTIONS:
     --raw        Plain text output (no color, no formatting)
     --no-links   Disable clickable hyperlinks
     --no-cache   Bypass the local cache; always fetch fresh data
+    --weather    Show current weather at the licensee's mailing address
+    --neighbors  Show other active licensees near the same mailing address
     --help       Print help
     --version    Print version
 
@@ -98,15 +100,27 @@ SHELLS: bash, zsh, fish, elvish, powershell
 **Examples:**
 
 ```bash
-callrx W1AW                    # Quick lookup (served from cache if fresh)
-callrx lookup KD9ABC           # Via subcommand
-callrx lookup W1AW --json      # Raw JSON (pipe to jq)
-callrx lookup W1AW --raw       # Plain text (pipe to grep)
-callrx lookup W1AW --no-cache  # Force a fresh API fetch
+callrx W1AW                       # Quick lookup (served from cache if fresh)
+callrx lookup KD9ABC              # Via subcommand
+callrx lookup W1AW --json         # Raw JSON (pipe to jq)
+callrx lookup W1AW --raw          # Plain text (pipe to grep)
+callrx lookup W1AW --no-cache     # Force a fresh API fetch
+callrx lookup W1AW --weather      # Add current weather at the licensee's address
+callrx lookup W1AW --neighbors    # Add co-located licensees
 callrx lookup W1AW | grep Expires # Colors stripped when piped
-callrx history W1AW            # Show all past lookups of W1AW
-callrx history W1AW --raw      # History as plain text (for scripts)
+callrx history W1AW                # Show all past lookups of W1AW
+callrx history W1AW --raw          # History as plain text (for scripts)
 ```
+
+Every lookup includes the full license record — service (Amateur/GMRS), call
+group and district, previous callsign/class, vanity assignment info, contact
+email/phone, all license dates, any other licenses held by the same FRN
+("Also licensed as"), and local time at the licensee's mailing address (fetched
+fresh on every lookup — it can't be derived without geocoding, and it's never
+cached since it changes constantly). `--weather` shows the current conditions
+that come back with that same lookup, at no extra API cost. `--neighbors` makes
+one extra, uncached API call for other active licensees at the same address and
+street.
 
 ### Local cache
 

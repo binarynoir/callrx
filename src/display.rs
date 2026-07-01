@@ -1,4 +1,7 @@
-use crate::api::{AddressInfo, CallsignRecord};
+use crate::api::{
+    AddressInfo, CallsignRecord, CallsignSummary, LocationTimeInfo, NeighborSummary,
+    NeighborsResponse, WeatherInfo,
+};
 use crate::cache::TTL_SECS;
 use crate::hyperlink;
 use anstream::{eprintln, println};
@@ -126,13 +129,18 @@ pub(crate) fn cache_info_label(cached_at: u64, ttl_secs: u64) -> String {
     )
 }
 
-pub fn print_pretty(record: &CallsignRecord, links_enabled: bool, cached_at: Option<u64>) {
+pub fn print_pretty(
+    record: &CallsignRecord,
+    links_enabled: bool,
+    cached_at: Option<u64>,
+    local_time: Option<&LocationTimeInfo>,
+) {
     // Detect OSC 8 support — respect the caller's override flag
     let use_links = links_enabled && hyperlink::osc8_supported();
 
     let callsign = record.callsign();
     let name = record.display_name.as_str();
-    let rows = build_rows(record, use_links, cached_at);
+    let rows = build_rows(record, use_links, cached_at, local_time);
 
     // ── Render a content-sized box, measuring visible width to stay aligned ─────
     let label_w = rows
@@ -169,6 +177,10 @@ pub fn print_pretty(record: &CallsignRecord, links_enabled: bool, cached_at: Opt
         );
     }
     println!();
+
+    if let Some(siblings) = record.frn_licenses.as_deref().filter(|s| !s.is_empty()) {
+        print_also_licensed(siblings);
+    }
 }
 
 /// Composes the "CITY, ST ZIP" address line from the structured address,
@@ -197,11 +209,46 @@ fn format_city_line(addr: &AddressInfo) -> Option<String> {
     if line.is_empty() { None } else { Some(line) }
 }
 
+/// Maps an FCC call group code to its human-readable label.
+fn group_code_label(code: &str) -> &str {
+    match code {
+        "A" => "Group A",
+        "B" => "Group B",
+        "C" => "Group C",
+        "D" => "Group D",
+        _ => code,
+    }
+}
+
+/// Maps an FCC vanity relationship code to its human-readable label.
+fn vanity_relationship_label(code: &str) -> &str {
+    match code {
+        "P" => "Previous holder",
+        "R" => "Close relative",
+        "S" => "Surviving spouse",
+        _ => code,
+    }
+}
+
 /// Builds the `(label, styled value)` rows shown in the pretty table.
+/// Formats a [`LocationTimeInfo`] as e.g. `"17:35 · America/New_York"`.
+fn format_local_time(info: &LocationTimeInfo) -> String {
+    let time = info
+        .local_time
+        .as_deref()
+        .and_then(|s| s.split('T').nth(1))
+        .unwrap_or("—");
+    match info.timezone.as_deref().filter(|s| !s.is_empty()) {
+        Some(tz) => format!("{time} · {tz}"),
+        None => time.to_string(),
+    }
+}
+
 fn build_rows(
     record: &CallsignRecord,
     use_links: bool,
     cached_at: Option<u64>,
+    local_time: Option<&LocationTimeInfo>,
 ) -> Vec<(&'static str, String)> {
     let expired = record.is_expired();
     let mut rows: Vec<(&'static str, String)> = Vec::new();
@@ -225,6 +272,11 @@ fn build_rows(
             .to_string(),
     ));
 
+    // Radio service (Amateur Radio vs GMRS)
+    if let Some(service_label) = record.service_label.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Service", service_label.to_string()));
+    }
+
     // License class (skipped when unknown/absent)
     let class = record.license_class_label();
     if class != "—" {
@@ -236,7 +288,19 @@ fn build_rows(
             "Novice" => class.yellow().to_string(),
             _ => class.to_string(),
         };
+        let class_val = match record.operator_class.as_deref().filter(|s| !s.is_empty()) {
+            Some(code) => format!("{class_val} ({code})"),
+            None => class_val,
+        };
         rows.push(("Class", class_val));
+    }
+
+    // Call group / district
+    if let Some(group) = record.group_code.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Group", format!("{} ({group})", group_code_label(group))));
+    }
+    if let Some(district) = record.region_code.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("District", district.to_string()));
     }
 
     // Trustee (club licenses)
@@ -248,13 +312,31 @@ fn build_rows(
         ));
     }
 
-    // Previous callsign
+    // Previous callsign / class / vanity assignment
     if let Some(pc) = record
         .previous_callsign
         .as_deref()
         .filter(|s| !s.is_empty())
     {
         rows.push(("Previous", pc.dimmed().to_string()));
+    }
+    if let Some(pcl) = record
+        .previous_operator_class_label
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        rows.push(("Prev. Class", pcl.dimmed().to_string()));
+    }
+    if record.vanity_call_sign_change.as_deref() == Some("Y") {
+        let vanity_val = match record
+            .vanity_relationship
+            .as_deref()
+            .filter(|s| !s.is_empty())
+        {
+            Some(rel) => format!("Vanity — {}", vanity_relationship_label(rel)),
+            None => "Vanity".to_string(),
+        };
+        rows.push(("Assignment", vanity_val));
     }
 
     // Address
@@ -270,10 +352,25 @@ fn build_rows(
     if let Some(line2) = format_city_line(addr) {
         rows.push(("", line2));
     }
+    if let Some(time) = local_time {
+        rows.push((
+            "Local Time",
+            format_local_time(time).bright_cyan().to_string(),
+        ));
+    }
+    if let Some(phone) = record.phone.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Phone", phone.to_string()));
+    }
+    if let Some(email) = record.email.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Email", email.to_string()));
+    }
 
     // Dates and identifiers
     if let Some(g) = record.grant_date.as_deref().filter(|s| !s.is_empty()) {
         rows.push(("Granted", g.to_string()));
+    }
+    if let Some(eff) = record.effective_date.as_deref().filter(|s| !s.is_empty()) {
+        rows.push(("Effective", eff.to_string()));
     }
     if let Some(e) = record.expired_date.as_deref().filter(|s| !s.is_empty()) {
         let expiry_val = if expired {
@@ -283,11 +380,21 @@ fn build_rows(
         };
         rows.push(("Expires", expiry_val));
     }
+    if let Some(c) = record
+        .cancellation_date
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        rows.push(("Cancelled", c.bright_red().to_string()));
+    }
     if let Some(d) = record.last_action_date.as_deref().filter(|s| !s.is_empty()) {
         rows.push(("Last Action", d.dimmed().to_string()));
     }
     if let Some(frn) = record.frn.as_deref().filter(|s| !s.is_empty()) {
         rows.push(("FRN", frn.dimmed().to_string()));
+    }
+    if let Some(usi) = record.unique_system_identifier {
+        rows.push(("USI", usi.to_string().dimmed().to_string()));
     }
     // ULS link — clickable if supported
     if let Some(uls_url) = record.uls_url.as_deref().filter(|s| !s.is_empty()) {
@@ -304,22 +411,155 @@ fn build_rows(
     rows
 }
 
+/// Renders a compact "CALLSIGN  Name  status" line, used for list sections
+/// (also-licensed-as, neighbors) shared between the pretty and expanded output.
+fn format_summary_line(
+    call_sign: Option<&str>,
+    display_name: &str,
+    class_label: Option<&str>,
+    status_label: Option<&str>,
+) -> String {
+    let call = call_sign.unwrap_or("—").bright_cyan().bold().to_string();
+    let mut line = format!("{call}  {display_name}");
+    if let Some(s) = status_label.filter(|s| !s.is_empty()) {
+        line.push_str(&format!("  {}", s.dimmed()));
+    }
+    if let Some(c) = class_label.filter(|s| !s.is_empty()) {
+        line.push_str(&format!("  {}", c.dimmed()));
+    }
+    line
+}
+
+/// Prints the "Also Licensed As" section — other licenses held by the same FRN.
+pub fn print_also_licensed(licenses: &[CallsignSummary]) {
+    if licenses.is_empty() {
+        return;
+    }
+    println!("  {}", "Also licensed as".bold());
+    for lic in licenses {
+        println!(
+            "    {}",
+            format_summary_line(
+                lic.call_sign.as_deref(),
+                &lic.display_name,
+                lic.operator_class_label.as_deref(),
+                Some(lic.license_status_label.as_str()),
+            )
+        );
+    }
+    println!();
+}
+
+/// Prints co-located licensees found via `--neighbors` (at-address and same-street).
+pub fn print_neighbors(neighbors: &NeighborsResponse) {
+    if neighbors.address_count == 0 && neighbors.street_count == 0 {
+        return;
+    }
+
+    fn print_group(title: &str, group: &[NeighborSummary]) {
+        if group.is_empty() {
+            return;
+        }
+        println!("  {}", title.bold());
+        for nb in group {
+            println!(
+                "    {}",
+                format_summary_line(
+                    nb.call_sign.as_deref(),
+                    &nb.display_name,
+                    nb.operator_class_label.as_deref(),
+                    Some(nb.license_status_label.as_str()),
+                )
+            );
+        }
+        println!();
+    }
+
+    print_group("At this address", &neighbors.address_results);
+    print_group("On this street", &neighbors.street_results);
+}
+
+/// Prints local weather conditions found via `--weather`. Local time is part
+/// of the core record display, not repeated here.
+pub fn print_weather(weather: &WeatherInfo) {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(f) = weather.temperature_f {
+        parts.push(format!("{f}°F"));
+    }
+    if let Some(c) = weather.conditions.as_deref().filter(|s| !s.is_empty()) {
+        parts.push(c.to_string());
+    }
+    if let Some(h) = weather.humidity_pct {
+        parts.push(format!("{h}% humidity"));
+    }
+    if let Some(w) = weather.wind_speed_mph {
+        let dir = weather.wind_direction_label.as_deref().unwrap_or("");
+        parts.push(format!("{w} mph {dir}").trim_end().to_string());
+    }
+    if parts.is_empty() {
+        return;
+    }
+
+    println!("  {}", "Weather".bold());
+    println!("    {}", parts.join(" · ").dimmed());
+    println!();
+}
+
 // ── Plain text output (--raw) ─────────────────────────────────────────────────
 
-pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
+pub fn print_plain(
+    record: &CallsignRecord,
+    cached_at: Option<u64>,
+    local_time: Option<&LocationTimeInfo>,
+) {
     println!("Callsign:    {}", record.callsign());
     println!("Status:      {}", record.license_status_label);
 
     if let Some(t) = &record.license_type {
         println!("Type:        {t}");
     }
+    if let Some(s) = record.service_label.as_deref().filter(|s| !s.is_empty()) {
+        println!("Service:     {s}");
+    }
     println!("Class:       {}", record.license_class_label());
+
+    if let Some(group) = record.group_code.as_deref().filter(|s| !s.is_empty()) {
+        println!("Group:       {} ({group})", group_code_label(group));
+    }
+    if let Some(district) = record.region_code.as_deref().filter(|s| !s.is_empty()) {
+        println!("District:    {district}");
+    }
 
     println!("Name:        {}", record.display_name);
 
     if let Some(tc) = record.trustee_callsign.as_deref().filter(|s| !s.is_empty()) {
         let tn = record.trustee_name.as_deref().unwrap_or("");
         println!("Trustee:     {tn} ({tc})");
+    }
+
+    if let Some(pc) = record
+        .previous_callsign
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        println!("Previous:    {pc}");
+    }
+    if let Some(pcl) = record
+        .previous_operator_class_label
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        println!("Prev Class:  {pcl}");
+    }
+    if record.vanity_call_sign_change.as_deref() == Some("Y") {
+        match record
+            .vanity_relationship
+            .as_deref()
+            .filter(|s| !s.is_empty())
+        {
+            Some(rel) => println!("Assignment:  Vanity — {}", vanity_relationship_label(rel)),
+            None => println!("Assignment:  Vanity"),
+        }
     }
 
     let addr = &record.address;
@@ -334,12 +574,40 @@ pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
     if let Some(l2) = format_city_line(addr) {
         println!("             {l2}");
     }
+    if let Some(time) = local_time {
+        println!("Local Time:  {}", format_local_time(time));
+    }
+    if let Some(phone) = record.phone.as_deref().filter(|s| !s.is_empty()) {
+        println!("Phone:       {phone}");
+    }
+    if let Some(email) = record.email.as_deref().filter(|s| !s.is_empty()) {
+        println!("Email:       {email}");
+    }
 
     if let Some(g) = record.grant_date.as_deref().filter(|s| !s.is_empty()) {
         println!("Granted:     {g}");
     }
+    if let Some(eff) = record.effective_date.as_deref().filter(|s| !s.is_empty()) {
+        println!("Effective:   {eff}");
+    }
     if let Some(e) = record.expired_date.as_deref().filter(|s| !s.is_empty()) {
         println!("Expires:     {e}");
+    }
+    if let Some(c) = record
+        .cancellation_date
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    {
+        println!("Cancelled:   {c}");
+    }
+    if let Some(d) = record.last_action_date.as_deref().filter(|s| !s.is_empty()) {
+        println!("Last Action: {d}");
+    }
+    if let Some(frn) = record.frn.as_deref().filter(|s| !s.is_empty()) {
+        println!("FRN:         {frn}");
+    }
+    if let Some(usi) = record.unique_system_identifier {
+        println!("USI:         {usi}");
     }
     if let Some(uls) = record.uls_url.as_deref().filter(|s| !s.is_empty()) {
         println!("ULS URL:     {uls}");
@@ -347,6 +615,54 @@ pub fn print_plain(record: &CallsignRecord, cached_at: Option<u64>) {
 
     if let Some(ca) = cached_at {
         println!("Cached:      {}", cache_info_label(ca, TTL_SECS));
+    }
+
+    if let Some(siblings) = record.frn_licenses.as_deref().filter(|s| !s.is_empty()) {
+        println!();
+        println!("Also licensed as:");
+        for lic in siblings {
+            let call = lic.call_sign.as_deref().unwrap_or("—");
+            println!(
+                "  {call}  {}  {}",
+                lic.display_name, lic.license_status_label
+            );
+        }
+    }
+}
+
+/// Prints co-located licensees in plain-text form for `--neighbors --raw`.
+pub fn print_neighbors_plain(neighbors: &NeighborsResponse) {
+    fn print_group(title: &str, group: &[NeighborSummary]) {
+        if group.is_empty() {
+            return;
+        }
+        println!();
+        println!("{title}:");
+        for nb in group {
+            let call = nb.call_sign.as_deref().unwrap_or("—");
+            println!("  {call}  {}  {}", nb.display_name, nb.license_status_label);
+        }
+    }
+    print_group("At this address", &neighbors.address_results);
+    print_group("On this street", &neighbors.street_results);
+}
+
+/// Prints local weather in plain-text form for `--weather --raw`. Local time
+/// is part of the core record display, not repeated here.
+pub fn print_weather_plain(weather: &WeatherInfo) {
+    println!();
+    if let Some(c) = weather.conditions.as_deref().filter(|s| !s.is_empty()) {
+        println!("Weather:     {c}");
+    }
+    if let Some(f) = weather.temperature_f {
+        println!("Temp:        {f}°F");
+    }
+    if let Some(h) = weather.humidity_pct {
+        println!("Humidity:    {h}%");
+    }
+    if let Some(w) = weather.wind_speed_mph {
+        let dir = weather.wind_direction_label.as_deref().unwrap_or("");
+        println!("Wind:        {w} mph {dir}");
     }
 }
 
