@@ -1,6 +1,6 @@
 use crate::api::{
-    AddressInfo, CallsignRecord, CallsignSummary, LocationTimeInfo, NeighborSummary,
-    NeighborsResponse, WeatherInfo,
+    AddressInfo, BandPlanResponse, CallsignRecord, CallsignSummary, LocationTimeInfo,
+    NeighborSummary, NeighborsResponse, WeatherAlert, WeatherInfo,
 };
 use crate::cache::TTL_SECS;
 use crate::hyperlink;
@@ -352,6 +352,9 @@ fn build_rows(
     if let Some(line2) = format_city_line(addr) {
         rows.push(("", line2));
     }
+    if let Some(grid) = addr.grid_square() {
+        rows.push(("Grid", grid.bright_cyan().to_string()));
+    }
     if let Some(time) = local_time {
         rows.push((
             "Local Time",
@@ -505,6 +508,38 @@ pub fn print_weather(weather: &WeatherInfo) {
     println!();
 }
 
+/// Prints active NWS weather alerts found via `--weather`. Shown alongside
+/// the weather section — alerts come back in the same location-info response.
+pub fn print_alerts(alerts: &[WeatherAlert]) {
+    if alerts.is_empty() {
+        return;
+    }
+    println!("  {}", "Weather Alerts".bold());
+    for alert in alerts {
+        let event = alert.event.as_deref().unwrap_or("Weather Alert");
+        let header = match alert.severity.as_deref().filter(|s| !s.is_empty()) {
+            Some(sev) => format!("⚠ {event} ({sev})"),
+            None => format!("⚠ {event}"),
+        };
+        let styled = match alert
+            .severity
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str()
+        {
+            "extreme" | "severe" => header.bright_red().bold().to_string(),
+            "moderate" => header.yellow().bold().to_string(),
+            _ => header.bright_yellow().bold().to_string(),
+        };
+        println!("    {styled}");
+        if let Some(headline) = alert.headline.as_deref().filter(|s| !s.is_empty()) {
+            println!("      {}", headline.dimmed());
+        }
+    }
+    println!();
+}
+
 // ── Plain text output (--raw) ─────────────────────────────────────────────────
 
 pub fn print_plain(
@@ -573,6 +608,9 @@ pub fn print_plain(
     }
     if let Some(l2) = format_city_line(addr) {
         println!("             {l2}");
+    }
+    if let Some(grid) = addr.grid_square() {
+        println!("Grid:        {grid}");
     }
     if let Some(time) = local_time {
         println!("Local Time:  {}", format_local_time(time));
@@ -666,6 +704,25 @@ pub fn print_weather_plain(weather: &WeatherInfo) {
     }
 }
 
+/// Prints active NWS weather alerts in plain-text form for `--weather --raw`.
+pub fn print_alerts_plain(alerts: &[WeatherAlert]) {
+    if alerts.is_empty() {
+        return;
+    }
+    println!();
+    println!("Weather Alerts:");
+    for alert in alerts {
+        let event = alert.event.as_deref().unwrap_or("Weather Alert");
+        match alert.severity.as_deref().filter(|s| !s.is_empty()) {
+            Some(sev) => println!("  {event} ({sev})"),
+            None => println!("  {event}"),
+        }
+        if let Some(headline) = alert.headline.as_deref().filter(|s| !s.is_empty()) {
+            println!("    {headline}");
+        }
+    }
+}
+
 // ── History output ────────────────────────────────────────────────────────────
 
 pub fn print_history(callsign: &str, events: &[(u64, String)]) {
@@ -723,6 +780,220 @@ pub fn print_history_plain(callsign: &str, events: &[(u64, String)]) {
         let time = unix_to_time(*ts);
         let age = now.saturating_sub(*ts);
         println!("{date} {time}  {source}  {}", age_words(age));
+    }
+}
+
+// ── Band plan output ─────────────────────────────────────────────────────────
+
+/// Formats a kHz value in whichever unit reads best (kHz / MHz / GHz).
+fn format_freq_khz(khz: f64) -> (f64, &'static str) {
+    if khz >= 1_000_000.0 {
+        (khz / 1_000_000.0, "GHz")
+    } else if khz >= 1_000.0 {
+        (khz / 1_000.0, "MHz")
+    } else {
+        (khz, "kHz")
+    }
+}
+
+/// Trims a float to at most 3 decimal places, dropping trailing zeros.
+fn trim_num(n: f64) -> String {
+    let s = format!("{n:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+fn format_freq_range(low_khz: f64, high_khz: Option<f64>) -> String {
+    let (low, unit) = format_freq_khz(low_khz);
+    match high_khz {
+        Some(high) => {
+            let high = match unit {
+                "GHz" => high / 1_000_000.0,
+                "MHz" => high / 1_000.0,
+                _ => high,
+            };
+            format!("{}–{} {unit}", trim_num(low), trim_num(high))
+        }
+        None => format!("{} {unit} and above", trim_num(low)),
+    }
+}
+
+fn gmrs_type_label(channel_type: &str) -> &'static str {
+    match channel_type {
+        "462_main" => "462 MHz Main",
+        "462_interstitial" => "462 MHz Interstitial",
+        "467_main" => "467 MHz Main (repeater input)",
+        "467_interstitial" => "467 MHz Interstitial",
+        _ => "Unknown",
+    }
+}
+
+/// Prints the amateur/GMRS band plan reference data (`callrx bandplan`).
+pub fn print_bandplan(data: &BandPlanResponse) {
+    println!();
+
+    if let Some(bands) = &data.amateur_bands {
+        println!(
+            "{} {}",
+            "Amateur Radio Bands".bold(),
+            format!("· {} segments", bands.len()).dimmed()
+        );
+        println!();
+
+        let band_w = bands
+            .iter()
+            .map(|b| b.band.chars().count())
+            .max()
+            .unwrap_or(0)
+            .max("Band".len());
+        let freq_w = bands
+            .iter()
+            .map(|b| {
+                format_freq_range(b.freq_low_khz, b.freq_high_khz)
+                    .chars()
+                    .count()
+            })
+            .max()
+            .unwrap_or(0)
+            .max("Frequency".len());
+        let class_w = bands
+            .iter()
+            .map(|b| {
+                format!("{} ({})", b.min_operator_class_label, b.min_operator_class)
+                    .chars()
+                    .count()
+            })
+            .max()
+            .unwrap_or(0)
+            .max("Min Class".len());
+
+        println!(
+            "  {}",
+            format!(
+                "{:<band_w$}  {:<freq_w$}  {:<class_w$}  47 CFR",
+                "Band", "Frequency", "Min Class"
+            )
+            .bold()
+        );
+        let mut prev_band: Option<&str> = None;
+        for seg in bands {
+            let band_cell = if Some(seg.band.as_str()) == prev_band {
+                String::new()
+            } else {
+                seg.band.clone()
+            };
+            prev_band = Some(seg.band.as_str());
+            let freq = format_freq_range(seg.freq_low_khz, seg.freq_high_khz);
+            let class = format!(
+                "{} ({})",
+                seg.min_operator_class_label, seg.min_operator_class
+            );
+            let line = format!(
+                "{band_cell:<band_w$}  {freq:<freq_w$}  {class:<class_w$}  {}",
+                seg.cfr_paragraph
+            );
+            if band_cell.is_empty() {
+                println!("  {}", line.dimmed());
+            } else {
+                println!("  {line}");
+            }
+        }
+        println!();
+    }
+
+    if let Some(channels) = &data.gmrs_channels {
+        println!(
+            "{} {}",
+            "GMRS Channels".bold(),
+            format!("· {} channels", channels.len()).dimmed()
+        );
+        println!();
+
+        let freq_w = channels
+            .iter()
+            .map(|c| format!("{:.4} MHz", c.frequency_mhz).chars().count())
+            .max()
+            .unwrap_or(0)
+            .max("Frequency".len());
+        let group_w = channels
+            .iter()
+            .map(|c| gmrs_type_label(&c.channel_type).len())
+            .max()
+            .unwrap_or(0)
+            .max("Group".len());
+        let power_w = channels
+            .iter()
+            .map(|c| format!("{} W", trim_num(c.max_power_watts)).chars().count())
+            .max()
+            .unwrap_or(0)
+            .max("Power".len());
+
+        println!(
+            "  {}",
+            format!(
+                "{:<freq_w$}  {:<group_w$}  {:<power_w$}  Notes",
+                "Frequency", "Group", "Power"
+            )
+            .bold()
+        );
+        for ch in channels {
+            let freq = format!("{:.4} MHz", ch.frequency_mhz);
+            let group = gmrs_type_label(&ch.channel_type);
+            let power = format!("{} W", trim_num(ch.max_power_watts));
+            println!(
+                "  {freq:<freq_w$}  {group:<group_w$}  {power:<power_w$}  {}",
+                ch.notes
+            );
+        }
+        println!();
+    }
+
+    if !data.source.is_empty() {
+        println!("  {}", data.source.dimmed());
+        println!();
+    }
+}
+
+/// Prints the band plan in plain-text form for `callrx bandplan --raw`.
+pub fn print_bandplan_plain(data: &BandPlanResponse) {
+    if let Some(bands) = &data.amateur_bands {
+        println!("Amateur Radio Bands ({} segments):", bands.len());
+        let mut prev_band: Option<&str> = None;
+        for seg in bands {
+            let band_cell = if Some(seg.band.as_str()) == prev_band {
+                ""
+            } else {
+                seg.band.as_str()
+            };
+            prev_band = Some(seg.band.as_str());
+            println!(
+                "{band_cell:<8} {:<20} {:<20} {}",
+                format_freq_range(seg.freq_low_khz, seg.freq_high_khz),
+                format!(
+                    "{} ({})",
+                    seg.min_operator_class_label, seg.min_operator_class
+                ),
+                seg.cfr_paragraph
+            );
+        }
+    }
+
+    if let Some(channels) = &data.gmrs_channels {
+        println!();
+        println!("GMRS Channels ({} channels):", channels.len());
+        for ch in channels {
+            println!(
+                "{:<14} {:<30} {:<8} {}",
+                format!("{:.4} MHz", ch.frequency_mhz),
+                gmrs_type_label(&ch.channel_type),
+                format!("{} W", trim_num(ch.max_power_watts)),
+                ch.notes
+            );
+        }
+    }
+
+    if !data.source.is_empty() {
+        println!();
+        println!("Source: {}", data.source);
     }
 }
 
