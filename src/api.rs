@@ -74,6 +74,39 @@ pub struct AddressInfo {
     pub state: Option<String>,
     pub zip_code: Option<String>,
     pub po_box: Option<String>,
+    /// Approximate — the centroid of the mailing ZIP code (US Census ZCTA
+    /// Gazetteer), not the exact street address.
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
+}
+
+impl AddressInfo {
+    /// Derives a 6-character Maidenhead grid square from `latitude`/`longitude`,
+    /// or `None` when either is absent. The service doesn't compute or return
+    /// this itself — it's a well-known, purely local formula, so it's derived
+    /// client-side rather than duplicated server-side.
+    pub fn grid_square(&self) -> Option<String> {
+        let (lat, lon) = (self.latitude?, self.longitude?);
+        let lon = (lon + 180.0).rem_euclid(360.0);
+        let lat = (lat + 90.0).rem_euclid(180.0);
+
+        let field_lon = (lon / 20.0) as u8;
+        let field_lat = (lat / 10.0) as u8;
+        let square_lon = ((lon % 20.0) / 2.0) as u8;
+        let square_lat = (lat % 10.0) as u8;
+        let sub_lon = (((lon % 20.0) % 2.0) / (2.0 / 24.0)) as u8;
+        let sub_lat = (((lat % 10.0) % 1.0) / (1.0 / 24.0)) as u8;
+
+        Some(format!(
+            "{}{}{}{}{}{}",
+            (b'A' + field_lon) as char,
+            (b'A' + field_lat) as char,
+            square_lon,
+            square_lat,
+            (b'a' + sub_lon) as char,
+            (b'a' + sub_lat) as char,
+        ))
+    }
 }
 
 /// Compact record used for FRN siblings and neighbors.
@@ -142,8 +175,21 @@ pub struct LocationTimeInfo {
     pub utc_offset_seconds: Option<i64>,
 }
 
-/// Response from `GET /callsign/{callsign}/location-info` — local time and
-/// weather at the licensee's mailing address.
+/// A single active NWS weather alert covering the licensee's location.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeatherAlert {
+    pub event: Option<String>,
+    /// NWS severity: `Extreme`, `Severe`, `Moderate`, `Minor`, or `Unknown`.
+    pub severity: Option<String>,
+    pub urgency: Option<String>,
+    pub headline: Option<String>,
+    pub effective: Option<String>,
+    pub expires: Option<String>,
+    pub area_desc: Option<String>,
+}
+
+/// Response from `GET /callsign/{callsign}/location-info` — local time,
+/// weather, and active alerts at the licensee's mailing address.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LocationInfoResponse {
     pub call_sign: Option<String>,
@@ -151,6 +197,47 @@ pub struct LocationInfoResponse {
     pub state: Option<String>,
     pub time: Option<LocationTimeInfo>,
     pub weather: Option<WeatherInfo>,
+    /// Active NWS alerts (empty when none are active; `None` only if the
+    /// alerts fetch itself failed server-side).
+    pub alerts: Option<Vec<WeatherAlert>>,
+}
+
+/// A single amateur radio frequency segment from 47 CFR § 97.301.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BandSegment {
+    pub band: String,
+    pub freq_low_khz: f64,
+    /// `None` for the open-ended top band (above 275 GHz).
+    pub freq_high_khz: Option<f64>,
+    /// Minimum FCC operator class code authorized (N/T/G/A/E).
+    pub min_operator_class: String,
+    pub min_operator_class_label: String,
+    pub cfr_paragraph: String,
+}
+
+/// A single GMRS channel from 47 CFR § 95.1763.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GmrsChannel {
+    pub frequency_mhz: f64,
+    /// `462_main`, `462_interstitial`, `467_main`, or `467_interstitial`.
+    pub channel_type: String,
+    pub max_power_watts: f64,
+    /// Offset in kHz to the paired repeater-input channel; `None` for
+    /// interstitial channels, which have no repeater pairing.
+    pub repeater_offset_khz: Option<i64>,
+    pub notes: String,
+}
+
+/// Response from `GET /bandplan` — static amateur/GMRS frequency allocation
+/// reference data.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BandPlanResponse {
+    /// `None` when `service=G` was requested.
+    pub amateur_bands: Option<Vec<BandSegment>>,
+    /// `None` when `service=A` was requested.
+    pub gmrs_channels: Option<Vec<GmrsChannel>>,
+    #[serde(default)]
+    pub source: String,
 }
 
 fn get_json<T: DeserializeOwned>(path: &str, not_found: &str) -> Result<T> {
@@ -204,6 +291,16 @@ pub fn lookup_location_info(callsign: &str) -> Result<LocationInfoResponse> {
         &format!("/callsign/{callsign}/location-info"),
         &format!("Callsign '{callsign}' was not found in the FCC ULS database."),
     )
+}
+
+/// Fetch the static amateur/GMRS band plan reference data. `service` restricts
+/// the result to `"A"` (amateur only) or `"G"` (GMRS only); `None` returns both.
+pub fn lookup_bandplan(service: Option<&str>) -> Result<BandPlanResponse> {
+    let path = match service {
+        Some(s) => format!("/bandplan?service={s}"),
+        None => "/bandplan".to_string(),
+    };
+    get_json(&path, "Band plan data was not found.")
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -275,5 +372,38 @@ mod tests {
         assert_eq!(rec.callsign(), "W1AW");
         rec.call_sign = None;
         assert_eq!(rec.callsign(), "—");
+    }
+
+    // ── AddressInfo::grid_square ─────────────────────────────────────────────
+
+    #[test]
+    fn grid_square_none_when_coords_missing() {
+        let addr = AddressInfo::default();
+        assert_eq!(addr.grid_square(), None);
+    }
+
+    #[test]
+    fn grid_square_newington_ct() {
+        // W1AW's mailing address — well-known reference point, FN31.
+        let addr = AddressInfo {
+            latitude: Some(41.686764),
+            longitude: Some(-72.730593),
+            ..Default::default()
+        };
+        let grid = addr.grid_square().unwrap();
+        assert!(grid.starts_with("FN31"), "grid: {grid}");
+        assert_eq!(grid.len(), 6);
+    }
+
+    #[test]
+    fn grid_square_southern_hemisphere() {
+        // Sydney, Australia — negative lat/lon exercise the rem_euclid wrap.
+        let addr = AddressInfo {
+            latitude: Some(-33.8688),
+            longitude: Some(151.2093),
+            ..Default::default()
+        };
+        let grid = addr.grid_square().unwrap();
+        assert!(grid.starts_with("QF56"), "grid: {grid}");
     }
 }

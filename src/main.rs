@@ -16,7 +16,7 @@ use color_eyre::Result;
     version,
     about = "Beautiful amateur radio callsign lookup for the terminal",
     long_about = "Look up FCC ULS amateur radio licenses by callsign.\n\nData is served by callrx-service, a REST API over the official FCC\nUniversal Licensing System (ULS) database.\n\nSupports clickable links in iTerm2, WezTerm, Windows Terminal, and other\nOSC 8-capable terminals.",
-    after_help = "EXAMPLES:\n  callrx W1AW\n  callrx W1AW --json\n  callrx W1AW --weather --neighbors\n  callrx lookup W1AW --raw"
+    after_help = "EXAMPLES:\n  callrx W1AW\n  callrx W1AW --json\n  callrx W1AW --weather --neighbors\n  callrx lookup W1AW --raw\n  callrx bandplan\n  callrx bandplan --service G"
 )]
 struct Cli {
     /// Callsign to look up (shorthand — same as `callrx lookup <CALLSIGN>`)
@@ -51,6 +51,18 @@ enum Commands {
     Completions {
         /// Shell to generate completions for
         shell: Shell,
+    },
+    /// Show the amateur radio / GMRS band plan reference (47 CFR Part 97 / 95)
+    Bandplan {
+        /// Restrict to one service: `A` (amateur) or `G` (GMRS). Omit for both.
+        #[arg(long, value_parser = ["A", "G"])]
+        service: Option<String>,
+        /// Output the raw JSON response from the callrx-service API
+        #[arg(long)]
+        json: bool,
+        /// Output plain text without color or formatting
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -104,6 +116,9 @@ fn main() -> Result<()> {
         (None, Some(Commands::Completions { shell })) => {
             clap_complete::generate(shell, &mut Cli::command(), "callrx", &mut std::io::stdout());
         }
+        (None, Some(Commands::Bandplan { service, json, raw })) => {
+            run_bandplan(service.as_deref(), json, raw)?
+        }
         (Some(_), Some(_)) => {
             eprintln!("Error: provide either a callsign or a subcommand, not both.");
             std::process::exit(1);
@@ -129,6 +144,30 @@ fn run_history(callsign: &str, raw: bool) -> Result<()> {
     } else {
         display::print_history(&callsign, &events);
     }
+    Ok(())
+}
+
+fn run_bandplan(service: Option<&str>, json: bool, raw: bool) -> Result<()> {
+    let spinner = display::make_spinner("Fetching band plan…");
+    let result = api::lookup_bandplan(service);
+    spinner.finish_and_clear();
+
+    let data = match result {
+        Ok(d) => d,
+        Err(e) => {
+            display::print_error("bandplan", &e.to_string());
+            std::process::exit(1);
+        }
+    };
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&data)?);
+    } else if raw {
+        display::print_bandplan_plain(&data);
+    } else {
+        display::print_bandplan(&data);
+    }
+
     Ok(())
 }
 
@@ -185,10 +224,17 @@ fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
         result
     });
     let local_time = location_info.as_ref().and_then(|l| l.time.as_ref());
+    // --weather also gates alerts: both come back in the same location-info
+    // response as weather, so showing them together adds no extra API cost.
     let weather = opts
         .weather
         .then(|| location_info.as_ref().and_then(|l| l.weather.as_ref()))
         .flatten();
+    let alerts = opts
+        .weather
+        .then(|| location_info.as_ref().and_then(|l| l.alerts.as_deref()))
+        .flatten()
+        .unwrap_or(&[]);
 
     // --neighbors is a separate, opt-in API call; also never cached.
     let neighbors = if opts.neighbors {
@@ -211,6 +257,9 @@ fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
             if let Some(w) = weather {
                 map.insert("weather".to_string(), serde_json::to_value(w)?);
             }
+            if !alerts.is_empty() {
+                map.insert("alerts".to_string(), serde_json::to_value(alerts)?);
+            }
             if let Some(n) = &neighbors {
                 map.insert("neighbors".to_string(), serde_json::to_value(n)?);
             }
@@ -221,6 +270,7 @@ fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
         if let Some(w) = weather {
             display::print_weather_plain(w);
         }
+        display::print_alerts_plain(alerts);
         if let Some(n) = &neighbors {
             display::print_neighbors_plain(n);
         }
@@ -229,6 +279,7 @@ fn run_lookup(callsign: &str, opts: &OutputOpts) -> Result<()> {
         if let Some(w) = weather {
             display::print_weather(w);
         }
+        display::print_alerts(alerts);
         if let Some(n) = &neighbors {
             display::print_neighbors(n);
         }

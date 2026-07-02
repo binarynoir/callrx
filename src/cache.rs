@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::api::{AddressInfo, CallsignRecord};
 
-const SCHEMA_VERSION: i32 = 3;
+const SCHEMA_VERSION: i32 = 4;
 
 /// Cache TTL: 7 days, matching the FCC's weekly ULS bulk-data publication.
 pub const TTL_SECS: u64 = 7 * 24 * 60 * 60;
@@ -86,6 +86,8 @@ fn apply_schema(conn: &Connection) -> Result<()> {
              state                         TEXT,
              zip_code                      TEXT,
              po_box                        TEXT,
+             latitude                      REAL,
+             longitude                     REAL,
              email                         TEXT,
              phone                         TEXT,
              frn                           TEXT,
@@ -129,7 +131,7 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
                 operator_class, operator_class_label, group_code, region_code,
                 previous_callsign, previous_operator_class, previous_operator_class_label,
                 trustee_callsign, trustee_name, vanity_call_sign_change, vanity_relationship,
-                street, city, state, zip_code, po_box, email, phone,
+                street, city, state, zip_code, po_box, latitude, longitude, email, phone,
                 frn, grant_date, expired_date, cancellation_date, effective_date,
                 last_action_date, uls_url, service, service_label, frn_licenses_json,
                 cached_at
@@ -158,19 +160,21 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
             let state: Option<String> = row.get(18)?;
             let zip_code: Option<String> = row.get(19)?;
             let po_box: Option<String> = row.get(20)?;
-            let email: Option<String> = row.get(21)?;
-            let phone: Option<String> = row.get(22)?;
-            let frn: Option<String> = row.get(23)?;
-            let grant_date: Option<String> = row.get(24)?;
-            let expired_date: Option<String> = row.get(25)?;
-            let cancellation_date: Option<String> = row.get(26)?;
-            let effective_date: Option<String> = row.get(27)?;
-            let last_action_date: Option<String> = row.get(28)?;
-            let uls_url: Option<String> = row.get(29)?;
-            let service: Option<String> = row.get(30)?;
-            let service_label: Option<String> = row.get(31)?;
-            let frn_licenses_json: Option<String> = row.get(32)?;
-            let cached_at: i64 = row.get(33)?;
+            let latitude: Option<f64> = row.get(21)?;
+            let longitude: Option<f64> = row.get(22)?;
+            let email: Option<String> = row.get(23)?;
+            let phone: Option<String> = row.get(24)?;
+            let frn: Option<String> = row.get(25)?;
+            let grant_date: Option<String> = row.get(26)?;
+            let expired_date: Option<String> = row.get(27)?;
+            let cancellation_date: Option<String> = row.get(28)?;
+            let effective_date: Option<String> = row.get(29)?;
+            let last_action_date: Option<String> = row.get(30)?;
+            let uls_url: Option<String> = row.get(31)?;
+            let service: Option<String> = row.get(32)?;
+            let service_label: Option<String> = row.get(33)?;
+            let frn_licenses_json: Option<String> = row.get(34)?;
+            let cached_at: i64 = row.get(35)?;
 
             let frn_licenses = frn_licenses_json
                 .as_deref()
@@ -201,6 +205,8 @@ pub fn get(conn: &Connection, callsign: &str) -> Option<(CallsignRecord, u64)> {
                         state,
                         zip_code,
                         po_box,
+                        latitude,
+                        longitude,
                     },
                     email,
                     phone,
@@ -241,12 +247,12 @@ pub fn store(conn: &Connection, record: &CallsignRecord) -> Result<()> {
              operator_class, operator_class_label, group_code, region_code,
              previous_callsign, previous_operator_class, previous_operator_class_label,
              trustee_callsign, trustee_name, vanity_call_sign_change, vanity_relationship,
-             street, city, state, zip_code, po_box, email, phone,
+             street, city, state, zip_code, po_box, latitude, longitude, email, phone,
              frn, grant_date, expired_date, cancellation_date, effective_date,
              last_action_date, uls_url, service, service_label, frn_licenses_json, cached_at
          ) VALUES (
              ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,
-             ?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35
+             ?22,?23,?24,?25,?26,?27,?28,?29,?30,?31,?32,?33,?34,?35,?36,?37
          )
          ON CONFLICT(callsign) DO UPDATE SET
              unique_system_identifier      = excluded.unique_system_identifier,
@@ -270,6 +276,8 @@ pub fn store(conn: &Connection, record: &CallsignRecord) -> Result<()> {
              state                         = excluded.state,
              zip_code                      = excluded.zip_code,
              po_box                        = excluded.po_box,
+             latitude                      = excluded.latitude,
+             longitude                     = excluded.longitude,
              email                         = excluded.email,
              phone                         = excluded.phone,
              frn                           = excluded.frn,
@@ -306,6 +314,8 @@ pub fn store(conn: &Connection, record: &CallsignRecord) -> Result<()> {
             nonempty(addr.state.as_deref()),
             nonempty(addr.zip_code.as_deref()),
             nonempty(addr.po_box.as_deref()),
+            addr.latitude,
+            addr.longitude,
             nonempty(record.email.as_deref()),
             nonempty(record.phone.as_deref()),
             nonempty(record.frn.as_deref()),
@@ -382,6 +392,8 @@ mod tests {
                 state: Some("ST".to_string()),
                 zip_code: Some("00000".to_string()),
                 po_box: None,
+                latitude: Some(41.7),
+                longitude: Some(-72.7),
             },
             frn: Some("1234567890".to_string()),
             grant_date: Some("2020-01-01".to_string()),
@@ -429,6 +441,8 @@ mod tests {
         assert_eq!(rec.display_name, "TEST OPERATOR");
         assert_eq!(rec.address.street.as_deref(), Some("123 MAIN ST"));
         assert_eq!(rec.address.city.as_deref(), Some("ANYTOWN"));
+        assert_eq!(rec.address.latitude, Some(41.7));
+        assert_eq!(rec.address.longitude, Some(-72.7));
         assert_eq!(rec.frn.as_deref(), Some("1234567890"));
     }
 
