@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/binarynoir/callrx/compare/v0.8.1...v0.9.0) (2026-07-02)
+
+
+### Features
+
+* add grid square, NWS alerts, band plan, and lat/lon cache ([a904d0c](https://github.com/binarynoir/callrx/commit/a904d0ce47f5a10168878ef2b136163fc7f5be3e))
+
 ## [0.8.1](https://github.com/binarynoir/callrx/compare/v0.8.0...v0.8.1) (2026-07-01)
 
 
