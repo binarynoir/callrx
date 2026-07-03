@@ -75,8 +75,7 @@ callrx/
 │   └── tasks.json       — build, test, lint, fmt, run shortcuts
 ├── .github/
 │   ├── workflows/ci.yml              — PR/push checks: fmt + clippy + test × 3 OSes
-│   ├── workflows/release.yml         — tag-triggered cross-platform binary release
-│   ├── workflows/release-please.yml  — release PR + tag; invokes release & tap update
+│   ├── workflows/release.yml         — manual version bump + tag + release + binary build/attach
 │   └── workflows/update-homebrew.yml — regenerates the Homebrew tap formula on release
 ├── Cargo.toml
 ├── Cargo.lock           — committed (this is a binary, not a library)
@@ -228,33 +227,29 @@ cargo fmt
 
 ## Release process
 
-Versioning is automated with **release-please** (`release-please.yml`) driven by
-[Conventional Commits](https://www.conventionalcommits.org/). You do **not** edit
-the version in `Cargo.toml` by hand.
+Versioning is manual and driven entirely by `release.yml` — the same
+workflow_dispatch-with-a-bump-choice pattern as `callrx-service`,
+`callrx-frontend`, and `callrx-cli-admin`'s own release workflows. You do
+**not** edit the version in `Cargo.toml` by hand.
 
-1. Land work on `main` using conventional commit messages:
-   - `fix: …` → patch bump (0.1.0 → 0.1.1)
-   - `feat: …` → minor bump (0.1.0 → 0.2.0)
-   - `feat!: …` / `fix!: …` / a `BREAKING CHANGE:` footer → major bump
-   - `chore:`, `docs:`, `refactor:`, `test:`, `ci:` → no release on their own
-2. release-please opens/maintains a **Release PR** that bumps `Cargo.toml` +
-   `Cargo.lock` and updates `CHANGELOG.md`. Review and merge it when ready.
-3. On merge, release-please creates the `vX.Y.Z` tag and a GitHub Release with
-   notes from the changelog, then calls `release.yml` (via `workflow_call`) to
-   build binaries for all platforms and attach them to that release.
-4. After the binaries are attached, `update-homebrew.yml` regenerates the
-   formula in the Homebrew tap (see below) so `brew upgrade callrx` works.
+1. Merge all changes to `main` and confirm CI passes.
+2. Go to **Actions → Release → Run workflow** (`main` branch only).
+3. Choose a bump type (`patch` / `minor` / `major`) and, optionally, release
+   notes — leave notes blank to auto-generate them from commit messages.
+4. `release.yml`'s `version` job bumps `Cargo.toml`/`Cargo.lock`, commits the
+   bump to `main` with `[skip ci]`, creates and pushes the `vX.Y.Z` tag, and
+   publishes the GitHub release via `gh release create` (using the default
+   `GITHUB_TOKEN` — nothing else in this repo listens for the `release`
+   event, so no PAT is needed to fan out to another workflow).
+5. The `build` job (needs `version`) then builds binaries for all platforms
+   at that tag; `attach` (needs `build`) uploads them to the release via
+   `gh release upload --clobber`; `update-homebrew` (needs `attach`) calls
+   `update-homebrew.yml` to regenerate the formula in the Homebrew tap so
+   `brew upgrade callrx` picks up the new version.
 
-State lives in `release-please-config.json` and `.release-please-manifest.json`.
-
-**Manual / re-release:** `release.yml` can also be run from the Actions tab
-("Run workflow" → enter an existing tag), or triggered by pushing a `v*` tag
-directly. The `workflow_call` path skips note generation so it never clobbers
-release-please's notes; the manual paths generate notes as before.
-
-**Why workflow_call instead of a tag trigger:** a tag pushed by release-please's
-`GITHUB_TOKEN` will not trigger the `push: tags` workflow (GitHub's recursion
-guard). Invoking `release.yml` directly via `workflow_call` avoids needing a PAT.
+There is no `CHANGELOG.md` — release notes live only on the GitHub Release
+itself (auto-generated from commits, or the notes typed into the dispatch
+form).
 
 **Build targets:**
 
@@ -285,8 +280,9 @@ kept out of this public repo on purpose.
 - **Automation:** `update-homebrew.yml` regenerates `Formula/callrx.rb` after
   each release. It reads the version from the tag, pulls each platform's SHA256
   from the published `.tar.gz.sha256` sidecar assets, writes the formula, and
-  commits it to the tap. `release-please.yml` calls it once binaries are
-  attached; it can also be run manually from the Actions tab for an existing tag.
+  commits it to the tap. `release.yml`'s `update-homebrew` job calls it once
+  binaries are attached; it can also be run manually from the Actions tab for
+  an existing tag.
 - **Required secret:** `HOMEBREW_TAP_TOKEN` — a fine-grained PAT (or classic
   token with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
   default `GITHUB_TOKEN` cannot write to another repo, so this is mandatory for

@@ -1,38 +1,133 @@
 name: Release
 
+# Bump the version in Cargo.toml/Cargo.lock, commit, tag, and publish a GitHub
+# release, then build and attach cross-platform binaries and refresh the
+# Homebrew tap. Same manual bump-driven versioning as callrx-service,
+# callrx-frontend, and callrx-cli-admin's own release workflows.
+#
+# Run from: Actions → Release → Run workflow (main branch only)
+
 on:
-  push:
-    tags:
-      - "v*"        # Trigger on version tags: v0.1.0, v1.2.3, etc.
   workflow_dispatch:
     inputs:
-      tag:
-        description: "Existing tag to build and release (e.g. v0.1.0)"
+      bump:
+        description: "Version bump type"
         required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      release_notes:
+        description: "Release notes (optional — leave blank to auto-generate from commits)"
+        required: false
         type: string
-  # Called by release-please.yml after it creates a release.
-  workflow_call:
-    inputs:
-      tag:
-        description: "Tag to build and attach binaries to"
-        required: true
-        type: string
-      attach_only:
-        description: "Skip release-note generation; only upload binaries to the existing release"
-        type: boolean
-        default: true
 
 permissions:
-  contents: write   # Needed to create GitHub releases and upload assets
+  contents: write # Needed to create GitHub releases and upload assets
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
+  # ── Bump version, tag, and publish the release ─────────────────────────────
+  version:
+    name: Bump version and publish release
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version in Cargo.toml / Cargo.lock
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          python3 - << 'PYEOF'
+          import re, sys, os
+
+          def bump_version(path: str, new_version: str) -> None:
+              content = open(path).read()
+              match = re.search(r'(?m)^name = "callrx"\nversion = "(\d+)\.(\d+)\.(\d+)"', content)
+              if not match:
+                  print(f"ERROR: callrx version not found in {path}", file=sys.stderr)
+                  sys.exit(1)
+              new_content = (
+                  content[: match.start()]
+                  + f'name = "callrx"\nversion = "{new_version}"'
+                  + content[match.end() :]
+              )
+              open(path, "w").write(new_content)
+
+          toml_match = re.search(
+              r'(?m)^name = "callrx"\nversion = "(\d+)\.(\d+)\.(\d+)"',
+              open("Cargo.toml").read(),
+          )
+          if not toml_match:
+              print("ERROR: callrx version not found in Cargo.toml", file=sys.stderr)
+              sys.exit(1)
+
+          major, minor, patch = (int(g) for g in toml_match.groups())
+          old_version = f"{major}.{minor}.{patch}"
+
+          bump = os.environ["BUMP"]
+          if bump == "major":
+              major += 1
+              minor = 0
+              patch = 0
+          elif bump == "minor":
+              minor += 1
+              patch = 0
+          else:
+              patch += 1
+
+          new_version = f"{major}.{minor}.{patch}"
+          bump_version("Cargo.toml", new_version)
+          bump_version("Cargo.lock", new_version)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"new_version={new_version}\n")
+              f.write(f"tag=v{new_version}\n")
+
+          print(f"Bumped: {old_version} → {new_version}")
+          PYEOF
+
+      - name: Commit version bump and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore: bump version to ${{ steps.version.outputs.tag }} [skip ci]"
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin main
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          if [ -z "$RELEASE_NOTES" ]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "$RELEASE_NOTES"
+          fi
+
   # ── Build binaries for all platforms ──────────────────────────────────────
   build:
     name: Build · ${{ matrix.name }}
+    needs: version
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -76,7 +171,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.version.outputs.tag }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -117,11 +212,11 @@ jobs:
           BIN_NAME="callrx"
           TARGET="${{ matrix.target }}"
           RELEASE_DIR="target/${TARGET}/release"
-          ARCHIVE_NAME="${BIN_NAME}-${{ inputs.tag || github.ref_name }}-${TARGET}.tar.gz"
+          TAG="${{ needs.version.outputs.tag }}"
+          ARCHIVE_NAME="${BIN_NAME}-${TAG}-${TARGET}.tar.gz"
 
           # Substitute @@VERSION@@ in the man page and stage it for packaging.
-          VERSION_STR="${{ inputs.tag || github.ref_name }}"
-          VERSION_STR="${VERSION_STR#v}"
+          VERSION_STR="${TAG#v}"
           mkdir -p /tmp/man_staging/man
           sed "s/@@VERSION@@/${VERSION_STR}/g" man/callrx.1 > /tmp/man_staging/man/callrx.1
 
@@ -141,7 +236,8 @@ jobs:
           $BIN_NAME = "callrx.exe"
           $TARGET = "${{ matrix.target }}"
           $RELEASE_DIR = "target\$TARGET\release"
-          $ARCHIVE_NAME = "callrx-${{ inputs.tag || github.ref_name }}-$TARGET.zip"
+          $TAG = "${{ needs.version.outputs.tag }}"
+          $ARCHIVE_NAME = "callrx-$TAG-$TARGET.zip"
 
           Compress-Archive -Path "$RELEASE_DIR\$BIN_NAME", "README.md", "LICENSE" `
             -DestinationPath $ARCHIVE_NAME
@@ -171,18 +267,13 @@ jobs:
             ${{ env.ASSET }}
             ${{ env.ASSET }}.sha256
 
-  # ── Create GitHub Release and attach all binaries ─────────────────────────
-  release:
-    name: Create Release
-    needs: build
+  # ── Attach all built binaries to the release the version job created ──────
+  attach:
+    name: Attach binaries to release
+    needs: [version, build]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -192,17 +283,22 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: "callrx ${{ inputs.tag || github.ref_name }}"
-          draft: false
-          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}   # e.g. v1.0.0-beta
-          # release-please already wrote the notes; only generate them for
-          # standalone tag-push / manual runs (attach_only is unset there).
-          generate_release_notes: ${{ !inputs.attach_only }}
-          files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
-            artifacts/**/*.sha256
+      - name: Upload assets to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.version.outputs.tag }}" \
+            artifacts/*.tar.gz artifacts/*.zip artifacts/*.sha256 \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+  # ── Once the binaries are attached, regenerate the formula in the Homebrew
+  #    tap so `brew upgrade callrx` picks up the new version. ─────────────────
+  update-homebrew:
+    name: Update Homebrew tap
+    needs: [version, attach]
+    uses: ./.github/workflows/update-homebrew.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+    secrets:
+      tap_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

@@ -5,7 +5,7 @@
 Look up any US amateur radio callsign from the [FCC Universal Licensing System](https://wireless2.fcc.gov/UlsApp/UlsSearch/searchLicense.jsp) directly in your terminal — with color output, clickable links, and a clean table layout.
 
 [![CI](https://github.com/binarynoir/callrx/actions/workflows/ci.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/ci.yml)
-[![Release Please](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release-please.yml)
+[![Release](https://github.com/binarynoir/callrx/actions/workflows/release.yml/badge.svg)](https://github.com/binarynoir/callrx/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/binarynoir/callrx)](https://github.com/binarynoir/callrx/releases/latest)
 
 [![Support me on Buy Me a Coffee](https://img.shields.io/badge/Support%20me-Buy%20Me%20a%20Coffee-orange?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/binarynoir)
@@ -262,38 +262,34 @@ be run on demand from the **Actions** tab.
 
 ## Releasing
 
-Versioning is automated with [release-please](https://github.com/googleapis/release-please)
-and driven by [Conventional Commits](https://www.conventionalcommits.org/) — you
-**don't** edit the version in `Cargo.toml` by hand.
+Versioning is automated — you choose the bump type and `release.yml` does the
+rest, the same as `callrx-service`/`callrx-frontend`/`callrx-cli-admin`'s own
+release workflows. You **don't** edit the version in `Cargo.toml` by hand.
 
-1. Merge work into `main` using conventional commit messages:
+1. Merge all changes to `main` and confirm CI passes.
+2. Go to **Actions → Release → Run workflow** (make sure `main` is selected).
+3. Choose a bump type:
+   - `patch` — bug fixes and minor tweaks (e.g. `0.1.0` → `0.1.1`)
+   - `minor` — new features, backwards-compatible (e.g. `0.1.1` → `0.2.0`)
+   - `major` — breaking changes (e.g. `0.2.0` → `1.0.0`)
+4. Optionally enter release notes. Leave blank to auto-generate from commit messages.
+5. Click **Run workflow**.
 
-   | Commit prefix                      | Effect                     |
-   | ---------------------------------- | -------------------------- |
-   | `fix: …`                           | patch bump (0.1.0 → 0.1.1) |
-   | `feat: …`                          | minor bump (0.1.0 → 0.2.0) |
-   | `feat!: …` / `BREAKING CHANGE:`    | major bump (0.1.0 → 1.0.0) |
-   | `chore:` `docs:` `refactor:` `ci:` | no release on their own    |
+The workflow will:
 
-2. release-please opens and maintains a **Release PR** that bumps `Cargo.toml` +
-   `Cargo.lock` and updates `CHANGELOG.md`. Review and merge it when you're ready
-   to ship.
-3. On merge it creates the `vX.Y.Z` tag and a GitHub Release (notes from the
-   changelog), builds binaries for all platforms and attaches them, then
-   regenerates the [Homebrew tap](https://github.com/binarynoir/homebrew-callrx)
-   formula so `brew upgrade callrx` picks up the new version.
+- Bump the version in `Cargo.toml`/`Cargo.lock` and commit it to `main`
+- Create and push the version tag (e.g. `v0.1.1`) and publish a GitHub release
+- Build binaries for all platforms and attach them to that release
+- Regenerate the [Homebrew tap](https://github.com/binarynoir/homebrew-callrx)
+  formula so `brew upgrade callrx` picks up the new version
 
 **Build targets:** macOS (Apple Silicon + Intel), Linux (x86_64, ARM64, ARMv7),
 and Windows x86_64.
 
-**Manual / re-release:** the **Release** workflow can also be run from the
-**Actions** tab ("Run workflow" → enter an existing tag), or triggered by pushing
-a `v*` tag directly.
+Monitor the run at **Actions → Release**.
 
 > **One-time setup:**
 >
-> - In **Settings → Actions → General**, enable _"Allow GitHub Actions to create
->   and approve pull requests"_ so release-please can open the Release PR.
 > - Add a `HOMEBREW_TAP_TOKEN` repo secret: a fine-grained PAT (or classic token
 >   with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
 >   `update-homebrew.yml` workflow uses it to commit the regenerated formula to
