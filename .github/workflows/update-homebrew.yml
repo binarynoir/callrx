@@ -3,7 +3,7 @@ name: Update Homebrew Tap
 # Regenerate the callrx formula in binarynoir/homebrew-callrx after a release,
 # pointing it at the new version's prebuilt binaries and their SHA256 sums.
 #
-# Called by release-please.yml once binaries are attached to the release, and
+# Called by release.yml once binaries are attached to the release, and
 # also runnable on demand for an existing tag from the Actions tab.
 #
 # Requires a repo secret HOMEBREW_TAP_TOKEN: a fine-grained PAT (or classic
