@@ -45,12 +45,6 @@ jobs:
             target: aarch64-apple-darwin
             archive: tar.gz
 
-          # macOS — Intel
-          - name: macOS x86_64
-            os: macos-latest
-            target: x86_64-apple-darwin
-            archive: tar.gz
-
           # Linux — x86_64 (most servers and desktops)
           - name: Linux x86_64
             os: ubuntu-latest
