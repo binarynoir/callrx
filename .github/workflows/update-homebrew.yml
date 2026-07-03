@@ -60,12 +60,10 @@ jobs:
           }
 
           MAC_ARM="callrx-${TAG}-aarch64-apple-darwin.tar.gz"
-          MAC_X86="callrx-${TAG}-x86_64-apple-darwin.tar.gz"
           LIN_ARM="callrx-${TAG}-aarch64-unknown-linux-gnu.tar.gz"
           LIN_X86="callrx-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
 
           SHA_MAC_ARM="$(sha_for "$MAC_ARM")"
-          SHA_MAC_X86="$(sha_for "$MAC_X86")"
           SHA_LIN_ARM="$(sha_for "$LIN_ARM")"
           SHA_LIN_X86="$(sha_for "$LIN_X86")"
 
@@ -89,10 +87,6 @@ jobs:
               on_arm do
                 url "${BASE}/${MAC_ARM}"
                 sha256 "${SHA_MAC_ARM}"
-              end
-              on_intel do
-                url "${BASE}/${MAC_X86}"
-                sha256 "${SHA_MAC_X86}"
               end
             end
 
