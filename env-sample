@@ -4,3 +4,14 @@ CALLRX_CACHE_DIR=target/cache
 # loaded from .env and overrides the URL baked into release binaries. Point it at
 # your local or dev service.
 CALLRX_API_URL=http://localhost:8073
+
+# Your personal callrx-service API key (crx_...). Every lookup requires one —
+# run `callrx auth login` for a browser-based sign-in, or set it here manually.
+# Takes precedence over a saved `auth login` credential. Never baked into
+# release binaries; set it here for local `cargo run` only.
+CALLRX_API_KEY=
+
+# Overrides the directory `callrx auth login` saves its credential file in
+# (default: the OS config directory, e.g. ~/.config/callrx on Linux). Set to
+# redirect to target/config/ during dev, same as CALLRX_CACHE_DIR.
+CALLRX_CONFIG_DIR=target/config

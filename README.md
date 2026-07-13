@@ -206,6 +206,34 @@ For the authoritative FCC record, click the **ULS Record** link in the output.
 
 ---
 
+## Authentication
+
+Every lookup requires a personal callrx-service API key. The easiest way to
+get one is to sign in from the CLI itself:
+
+```bash
+callrx auth login
+```
+
+This opens your browser to confirm a short code, then saves a personal API
+key locally (in your OS config directory — never committed, never baked into
+the binary). Check on it any time with `callrx auth status`, or forget it
+with `callrx auth logout`.
+
+If you'd rather manage the key yourself — CI, automation, or a key created at
+[callrx.binarynoir.tech](https://callrx.binarynoir.tech) — set `CALLRX_API_KEY`
+instead; it always takes precedence over a saved `auth login` credential:
+
+```bash
+export CALLRX_API_KEY=crx_...
+callrx W1AW
+```
+
+A request with no key, or one that doesn't resolve to a real key, is rejected
+with a `401`.
+
+---
+
 ## Supported terminals (clickable links)
 
 OSC 8 hyperlinks work in:
@@ -232,10 +260,15 @@ backend. The endpoint is resolved at runtime from the `CALLRX_API_URL` environme
 variable, falling back to the URL baked in at build time, and finally to
 `http://localhost:8073`.
 
-For local development, copy `env-sample` to `.env` and point `CALLRX_API_URL` at
-your running service — `.env` is loaded automatically in debug builds (`cargo run`).
-Release binaries get their default endpoint from the `CALLRX_API_URL` GitHub Actions
-secret, baked in at compile time, so installed binaries work without any setup.
+For local development, copy `env-sample` to `.env` and point `CALLRX_API_URL`
+at your running service — `.env` is loaded automatically in debug builds
+(`cargo run`). Release binaries get their default endpoint from the
+`CALLRX_API_URL` GitHub Actions secret, baked in at compile time, so installed
+binaries work out of the box. The API key is handled separately (see
+[Authentication](#authentication) above) and, unlike the URL, is never baked
+into the binary — `callrx` is a publicly distributed binary, so a key is
+always either read from the environment (`CALLRX_API_KEY`) or loaded from the
+credential `callrx auth login` saved locally.
 
 ```bash
 # Build
@@ -257,6 +290,18 @@ cargo clippy --all-targets -- -D warnings
 CI (`.github/workflows/ci.yml`) runs `fmt`, `clippy -D warnings`, `build`, and
 `test` on Linux, macOS, and Windows for every push and pull request. It can also
 be run on demand from the **Actions** tab.
+
+The test job passes a `CALLRX_API_KEY` repo secret through as an environment
+variable, for any test that needs to authenticate against a real
+callrx-service instance. Add one with:
+
+```bash
+gh secret set CALLRX_API_KEY --repo binarynoir/callrx
+```
+
+(run without `--body`, so `gh` prompts for the value interactively rather than
+putting it in your shell history). Unset/empty is fine — no current test
+requires it.
 
 ---
 

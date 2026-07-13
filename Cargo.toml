@@ -40,6 +40,10 @@ dirs = "6"
 # .env file loading — used in debug builds only to redirect cache to target/cache/
 dotenvy = "0.15"
 
+# Opens the system browser for `callrx auth login` — sync, no tokio, same
+# rationale as minreq above.
+webbrowser = "=1.2.1"
+
 [profile.release]
 opt-level = 3
 lto = true

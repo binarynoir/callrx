@@ -22,6 +22,9 @@ callrx \- amateur radio callsign lookup via the FCC ULS database
 .br
 .B callrx completions
 .I SHELL
+.br
+.B callrx auth
+.RI [ login | status | logout ]
 .SH DESCRIPTION
 .B callrx
 is a command-line tool for looking up FCC Universal Licensing System (ULS)
@@ -249,12 +252,36 @@ The callsign was found and its license record was printed successfully.
 .TP
 .B 1
 An error occurred: the callsign was not found in the FCC ULS database,
-a network error occurred while contacting the callrx-service API, or the
-arguments were invalid.
+.B CALLRX_API_KEY
+was missing or invalid, a network error occurred while contacting the
+callrx-service API, or the arguments were invalid.
+.SH AUTH SUBCOMMAND
+.TP
+.B callrx auth login
+Sign in via a browser (an RFC 8628 device-authorization flow) and save a
+personal API key locally.
+Opens the default browser to a confirmation page; the same code is also
+printed for terminals without one.
+.TP
+.B callrx auth status
+Show the signed-in key's prefix, tier, and current quota usage.
+.TP
+.B callrx auth logout
+Delete the locally saved key.
+Does not revoke the key itself \(em use the account page at
+.I https://callrx.binarynoir.tech
+for that.
 .SH DATA SOURCE
 License data is served by callrx-service, a REST API over the official FCC
 Universal Licensing System (ULS) amateur radio database.
 The database is refreshed weekly from FCC bulk data releases.
+Every request requires a personal API key (see
+.B CALLRX_API_KEY
+under
+.BR ENVIRONMENT ,
+or
+.B callrx auth login
+above).
 The backend endpoint is configured via the
 .B CALLRX_API_URL
 environment variable (see
@@ -272,8 +299,23 @@ Overrides the URL compiled into release binaries; falls back to
 .I http://localhost:8073
 when unset.
 .TP
+.B CALLRX_API_KEY
+Personal callrx-service API key, sent as the
+.B X-API-Key
+request header.
+Required for every lookup; a missing or invalid key is rejected with a 401.
+Takes precedence over a credential saved by
+.BR "callrx auth login" .
+Never compiled into release binaries \(em always read from the environment
+or the saved credential file.
+.TP
 .B CALLRX_CACHE_DIR
 Overrides the directory of the local cache database.
+.TP
+.B CALLRX_CONFIG_DIR
+Overrides the directory
+.B callrx auth login
+saves its credential file in.
 .SH OPERATOR CLASS CODES
 The API reports the operator class as both a single-letter FCC code and a
 full label.

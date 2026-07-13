@@ -1008,6 +1008,32 @@ pub fn print_error(callsign: &str, message: &str) {
     );
 }
 
+/// Same styling as `print_error`, without a callsign — for `callrx auth`
+/// failures (login timeout/denial, network errors during device login).
+pub fn print_auth_error(message: &str) {
+    eprintln!("\n  {} {}\n", "✗".bright_red().bold(), message.dimmed());
+}
+
+pub fn print_key_usage(usage: &crate::api::KeyUsageResponse) {
+    println!();
+    println!("  Tier: {}", usage.tier.bold());
+    if usage.in_grace_period {
+        println!(
+            "  {}",
+            "New key — quota not yet enforced (24h grace period)".dimmed()
+        );
+    }
+    println!(
+        "  Daily:   {}/{} used ({} remaining, resets {})",
+        usage.used_today, usage.requests_per_day, usage.remaining_today, usage.reset_at
+    );
+    println!(
+        "  Minute:  {}/{} used ({} remaining)",
+        usage.used_this_minute, usage.requests_per_minute, usage.remaining_this_minute
+    );
+    println!();
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
