@@ -1,7 +1,7 @@
 use color_eyre::{Result, eyre::eyre};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::config::api_base_url;
+use crate::config::{api_base_url, api_key};
 
 /// A callsign license record from the callrx-service API.
 ///
@@ -243,14 +243,29 @@ pub struct BandPlanResponse {
 fn get_json<T: DeserializeOwned>(path: &str, not_found: &str) -> Result<T> {
     let url = format!("{}{path}", api_base_url());
 
-    let response = minreq::get(&url)
+    let mut request = minreq::get(&url)
         .with_header("User-Agent", concat!("callrx/", env!("CARGO_PKG_VERSION")))
-        .with_timeout(10)
-        .send()
-        .map_err(|e| eyre!("Network error: {e}"))?;
+        .with_timeout(10);
+
+    if let Some(key) = api_key() {
+        request = request.with_header("X-API-Key", key);
+    }
+
+    let response = request.send().map_err(|e| eyre!("Network error: {e}"))?;
 
     match response.status_code {
         200 => {}
+        401 => {
+            return Err(eyre!(
+                "Unauthorized — run `callrx auth login` to sign in, or set CALLRX_API_KEY to a \
+                 valid callrx-service API key."
+            ));
+        }
+        403 => {
+            return Err(eyre!(
+                "Forbidden — this API key has been suspended or revoked."
+            ));
+        }
         404 => return Err(eyre!("{not_found}")),
         429 => {
             return Err(eyre!(
@@ -301,6 +316,140 @@ pub fn lookup_bandplan(service: Option<&str>) -> Result<BandPlanResponse> {
         None => "/bandplan".to_string(),
     };
     get_json(&path, "Band plan data was not found.")
+}
+
+// ── Device-authorization login (`callrx auth login`) ────────────────────────
+
+/// Response from `POST /auth/device/code` — the start of a device login.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceCodeResponse {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: String,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+/// Returned by `POST /auth/device/token` once the login has been approved —
+/// the CLI's one-time look at its new key, same as a manual `POST /keys`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DeviceTokenResponse {
+    pub api_key: String,
+    pub key_prefix: String,
+    pub tier: String,
+}
+
+/// The signed-in key's current quota status — `GET /keys/usage`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct KeyUsageResponse {
+    pub tier: String,
+    pub requests_per_day: i64,
+    pub used_today: i64,
+    pub remaining_today: i64,
+    pub reset_at: String,
+    pub requests_per_minute: i64,
+    pub used_this_minute: i64,
+    pub remaining_this_minute: i64,
+    pub in_grace_period: bool,
+}
+
+/// Outcome of one `POST /auth/device/token` poll.
+pub enum DevicePollOutcome {
+    Pending,
+    SlowDown { new_interval_secs: u64 },
+    Denied(String),
+    Expired,
+    Success(DeviceTokenResponse),
+}
+
+/// Start a device login: `POST /auth/device/code`. Unauthenticated — no
+/// `X-API-Key` is attached, since signing in is how one is obtained.
+pub fn start_device_login() -> Result<DeviceCodeResponse> {
+    let url = format!("{}/auth/device/code", api_base_url());
+    let response = minreq::post(&url)
+        .with_header("User-Agent", concat!("callrx/", env!("CARGO_PKG_VERSION")))
+        .with_timeout(10)
+        .send()
+        .map_err(|e| eyre!("Network error: {e}"))?;
+
+    if response.status_code != 200 {
+        return Err(eyre!(
+            "HTTP {} from the callrx-service API while starting login.",
+            response.status_code
+        ));
+    }
+    response
+        .json()
+        .map_err(|e| eyre!("Failed to parse response: {e}"))
+}
+
+/// Maps a `POST /auth/device/token` error body (RFC 8628 vocabulary in
+/// `detail.error`) to an outcome. Pure and infallible — an unparseable or
+/// unrecognized body degrades to `Expired` rather than panicking, since the
+/// caller can't distinguish "give up" from "keep polling" any other safe way.
+fn parse_device_error(body: &str) -> DevicePollOutcome {
+    #[derive(Deserialize)]
+    struct ErrorBody {
+        detail: ErrorDetail,
+    }
+    #[derive(Deserialize)]
+    struct ErrorDetail {
+        error: String,
+        interval: Option<u64>,
+        message: Option<String>,
+    }
+
+    let Ok(parsed) = serde_json::from_str::<ErrorBody>(body) else {
+        return DevicePollOutcome::Expired;
+    };
+
+    match parsed.detail.error.as_str() {
+        "authorization_pending" => DevicePollOutcome::Pending,
+        "slow_down" => DevicePollOutcome::SlowDown {
+            new_interval_secs: parsed.detail.interval.unwrap_or(10),
+        },
+        "expired_token" => DevicePollOutcome::Expired,
+        "access_denied" => DevicePollOutcome::Denied(
+            parsed
+                .detail
+                .message
+                .unwrap_or_else(|| "Login was denied.".to_string()),
+        ),
+        _ => DevicePollOutcome::Expired,
+    }
+}
+
+/// Poll `POST /auth/device/token` once. Unauthenticated — the device_code
+/// itself is the credential.
+pub fn poll_device_token(device_code: &str) -> Result<DevicePollOutcome> {
+    let url = format!("{}/auth/device/token", api_base_url());
+    let body = serde_json::json!({ "device_code": device_code });
+    let response = minreq::post(&url)
+        .with_header("User-Agent", concat!("callrx/", env!("CARGO_PKG_VERSION")))
+        .with_timeout(10)
+        .with_json(&body)
+        .map_err(|e| eyre!("Failed to build request: {e}"))?
+        .send()
+        .map_err(|e| eyre!("Network error: {e}"))?;
+
+    if response.status_code == 200 {
+        return response
+            .json::<DeviceTokenResponse>()
+            .map(DevicePollOutcome::Success)
+            .map_err(|e| eyre!("Failed to parse response: {e}"));
+    }
+
+    Ok(parse_device_error(response.as_str().unwrap_or_default()))
+}
+
+/// Fetch the signed-in key's quota status — `GET /keys/usage`. Reuses
+/// `get_json`, which already attaches `X-API-Key` from `config::api_key()`.
+pub fn lookup_key_usage() -> Result<KeyUsageResponse> {
+    get_json(
+        "/keys/usage",
+        "No active API key — run `callrx auth login`.",
+    )
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -405,5 +554,62 @@ mod tests {
         };
         let grid = addr.grid_square().unwrap();
         assert!(grid.starts_with("QF56"), "grid: {grid}");
+    }
+
+    // ── parse_device_error ───────────────────────────────────────────────────
+
+    #[test]
+    fn parse_device_error_authorization_pending() {
+        let body = r#"{"detail": {"error": "authorization_pending"}}"#;
+        assert!(matches!(
+            parse_device_error(body),
+            DevicePollOutcome::Pending
+        ));
+    }
+
+    #[test]
+    fn parse_device_error_slow_down_carries_new_interval() {
+        let body = r#"{"detail": {"error": "slow_down", "interval": 15}}"#;
+        match parse_device_error(body) {
+            DevicePollOutcome::SlowDown { new_interval_secs } => {
+                assert_eq!(new_interval_secs, 15);
+            }
+            _ => panic!("expected SlowDown"),
+        }
+    }
+
+    #[test]
+    fn parse_device_error_expired_token() {
+        let body = r#"{"detail": {"error": "expired_token"}}"#;
+        assert!(matches!(
+            parse_device_error(body),
+            DevicePollOutcome::Expired
+        ));
+    }
+
+    #[test]
+    fn parse_device_error_access_denied_carries_message() {
+        let body = r#"{"detail": {"error": "access_denied", "message": "Login was denied in the browser"}}"#;
+        match parse_device_error(body) {
+            DevicePollOutcome::Denied(msg) => assert_eq!(msg, "Login was denied in the browser"),
+            _ => panic!("expected Denied"),
+        }
+    }
+
+    #[test]
+    fn parse_device_error_unparseable_body_degrades_to_expired() {
+        assert!(matches!(
+            parse_device_error("not json"),
+            DevicePollOutcome::Expired
+        ));
+    }
+
+    #[test]
+    fn parse_device_error_unrecognized_error_degrades_to_expired() {
+        let body = r#"{"detail": {"error": "something_new"}}"#;
+        assert!(matches!(
+            parse_device_error(body),
+            DevicePollOutcome::Expired
+        ));
     }
 }

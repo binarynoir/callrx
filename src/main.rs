@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod cache;
 mod config;
 mod display;
@@ -8,6 +9,8 @@ use anstream::{eprintln, println};
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
 use color_eyre::Result;
+use owo_colors::OwoColorize;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// callrx — Amateur radio callsign lookup (FCC ULS via callrx-service)
 #[derive(Parser, Debug)]
@@ -64,6 +67,21 @@ enum Commands {
         #[arg(long)]
         raw: bool,
     },
+    /// Manage sign-in to callrx-service
+    Auth {
+        #[command(subcommand)]
+        cmd: AuthCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum AuthCommand {
+    /// Sign in via a browser and save a personal API key locally
+    Login,
+    /// Show the signed-in key and its current quota usage
+    Status,
+    /// Forget the locally saved API key
+    Logout,
 }
 
 /// Output options shared by the bare-callsign shorthand and the `lookup` subcommand.
@@ -119,6 +137,7 @@ fn main() -> Result<()> {
         (None, Some(Commands::Bandplan { service, json, raw })) => {
             run_bandplan(service.as_deref(), json, raw)?
         }
+        (None, Some(Commands::Auth { cmd })) => run_auth(cmd)?,
         (Some(_), Some(_)) => {
             eprintln!("Error: provide either a callsign or a subcommand, not both.");
             std::process::exit(1);
@@ -168,6 +187,126 @@ fn run_bandplan(service: Option<&str>, json: bool, raw: bool) -> Result<()> {
         display::print_bandplan(&data);
     }
 
+    Ok(())
+}
+
+fn run_auth(cmd: AuthCommand) -> Result<()> {
+    match cmd {
+        AuthCommand::Login => run_login(),
+        AuthCommand::Status => run_status(),
+        AuthCommand::Logout => run_logout(),
+    }
+}
+
+fn run_login() -> Result<()> {
+    let device = match api::start_device_login() {
+        Ok(d) => d,
+        Err(e) => {
+            display::print_auth_error(&e.to_string());
+            std::process::exit(1);
+        }
+    };
+
+    println!();
+    println!("  Code: {}", device.user_code.bold());
+    println!("  Opening {} in your browser…", device.verification_uri);
+    println!("  (If it doesn't open, visit that URL and enter the code above.)");
+    println!();
+    let _ = webbrowser::open(&device.verification_uri_complete);
+
+    let spinner = display::make_spinner("Waiting for browser confirmation…");
+    let deadline = Instant::now() + Duration::from_secs(device.expires_in);
+    let mut interval = Duration::from_secs(device.interval);
+
+    loop {
+        if Instant::now() >= deadline {
+            spinner.finish_and_clear();
+            display::print_auth_error("Login timed out — run `callrx auth login` again.");
+            std::process::exit(1);
+        }
+        std::thread::sleep(interval);
+
+        match api::poll_device_token(&device.device_code) {
+            Ok(api::DevicePollOutcome::Pending) => {}
+            Ok(api::DevicePollOutcome::SlowDown { new_interval_secs }) => {
+                interval = Duration::from_secs(new_interval_secs);
+            }
+            Ok(api::DevicePollOutcome::Denied(msg)) => {
+                spinner.finish_and_clear();
+                display::print_auth_error(&msg);
+                std::process::exit(1);
+            }
+            Ok(api::DevicePollOutcome::Expired) => {
+                spinner.finish_and_clear();
+                display::print_auth_error("Login code expired — run `callrx auth login` again.");
+                std::process::exit(1);
+            }
+            Ok(api::DevicePollOutcome::Success(token)) => {
+                spinner.finish_and_clear();
+                let created_at = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    .to_string();
+                let cred = auth::StoredCredential {
+                    api_key: token.api_key,
+                    key_prefix: token.key_prefix.clone(),
+                    tier: token.tier.clone(),
+                    created_at,
+                };
+                if let Err(e) = auth::save(&cred) {
+                    display::print_auth_error(&format!(
+                        "Signed in, but failed to save the key locally: {e}"
+                    ));
+                    std::process::exit(1);
+                }
+                println!(
+                    "  {} Signed in — key {} ({} tier) saved.",
+                    "✓".green().bold(),
+                    token.key_prefix.bold(),
+                    token.tier
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                spinner.finish_and_clear();
+                display::print_auth_error(&e.to_string());
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+fn run_status() -> Result<()> {
+    let Some(cred) = auth::load() else {
+        println!("Not signed in. Run `callrx auth login`.");
+        return Ok(());
+    };
+
+    println!();
+    println!(
+        "  Signed in — key {} ({} tier)",
+        cred.key_prefix.bold(),
+        cred.tier
+    );
+
+    match api::lookup_key_usage() {
+        Ok(usage) => display::print_key_usage(&usage),
+        Err(e) => {
+            println!();
+            println!(
+                "  {}",
+                format!("Could not reach callrx-service: {e}").dimmed()
+            );
+            println!();
+        }
+    }
+    Ok(())
+}
+
+fn run_logout() -> Result<()> {
+    auth::clear()?;
+    println!("Signed out — local API key removed.");
     Ok(())
 }
 

@@ -37,6 +37,27 @@ fn trim_trailing_slash(url: &str) -> String {
     url.trim_end_matches('/').to_string()
 }
 
+/// Returns the callrx-service API key, if one is available.
+///
+/// Resolution order:
+/// 1. `CALLRX_API_KEY` environment variable — highest precedence, so CI/
+///    automation can always override whatever's stored locally.
+/// 2. The credential saved by `callrx auth login` (see `auth.rs`).
+///
+/// Never baked into the binary via `option_env!` like `CALLRX_API_URL`:
+/// `callrx` is a publicly distributed binary, and an embedded personal key
+/// would be trivially extractable from every release build.
+pub fn api_key() -> Option<String> {
+    if let Ok(key) = std::env::var("CALLRX_API_KEY") {
+        let key = key.trim();
+        if !key.is_empty() {
+            return Some(key.to_string());
+        }
+    }
+
+    crate::auth::load().map(|cred| cred.api_key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::trim_trailing_slash;
