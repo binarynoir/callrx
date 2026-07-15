@@ -3,9 +3,24 @@ name: CI
 on:
   push:
     branches: [main, master]
-    paths-ignore: ["**.md", ".vscode/**"]
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".clippy.toml"
+      - "rustfmt.toml"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main, master]
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".clippy.toml"
+      - "rustfmt.toml"
+      - "rust-toolchain.toml"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 env:
