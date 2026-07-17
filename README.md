@@ -11,8 +11,6 @@ Look up any US amateur radio callsign from the [FCC Universal Licensing System](
 [![Support me on Buy Me a Coffee](https://img.shields.io/badge/Support%20me-Buy%20Me%20a%20Coffee-orange?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/binarynoir)
 [![Support me on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-blue?style=for-the-badge&logo=ko-fi)](https://ko-fi.com/binarynoir)
 
-[![KD2YRZ on callrx](https://callrx.binarynoir.tech/badge/image?cs=KD2YRZ&loc=Tuxedo%20Park%2C%20NY&style=signal&size=md)](https://callrx.binarynoir.tech/?q=KD2YRZ)
-
 ---
 
 ## Demo
