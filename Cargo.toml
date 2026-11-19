@@ -15,34 +15,34 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI argument parsing
-clap = { version = "=4.6.1", features = ["derive", "color"] }
-clap_complete = "=4.6.5"
+clap = { version = "=4.6.8", features = ["derive", "color"] }
+clap_complete = "=4.6.12"
 
 # HTTP client — sync, minimal dep tree, no edition2024 transitive deps
-minreq = { version = "=2.14.1", features = ["https", "json-using-serde"] }
+minreq = { version = "=3.0.0", features = ["https", "json-using-serde"] }
 
 # JSON deserialization
-serde = { version = "=1.0.228", features = ["derive"] }
-serde_json = "=1.0.150"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
 
 # Terminal output — colors, spinner (the table is rendered by hand in display.rs)
-owo-colors = { version = "=4.3.0", features = ["supports-colors"] }
-indicatif = "=0.18.4"
+owo-colors = { version = "=4.4.0", features = ["supports-colors"] }
+indicatif = "=0.18.6"
 anstream = "=1.0.0"
 
 # Error handling
 color-eyre = "=0.6.5"
 
 # Local cache (SQLite) + XDG cache directory
-rusqlite = { version = "0.40", features = ["bundled"] }
-dirs = "6"
+rusqlite = { version = "0.43", features = ["bundled"] }
+dirs = "7"
 
 # .env file loading — used in debug builds only to redirect cache to target/cache/
 dotenvy = "0.15"
 
 # Opens the system browser for `callrx auth login` — sync, no tokio, same
 # rationale as minreq above.
-webbrowser = "=1.2.1"
+webbrowser = "=1.2.7"
 
 [profile.release]
 opt-level = 3
