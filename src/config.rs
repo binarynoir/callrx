@@ -8,8 +8,9 @@
 //!    loaded from `.env` by `dotenvy` in `main`, so `cargo run` targets the dev
 //!    service automatically.
 //! 2. `CALLRX_API_URL` baked in at compile time via `option_env!`. The release
-//!    workflow supplies this from a GitHub secret so the production endpoint is
-//!    not committed to the (public) source tree.
+//!    workflow supplies this from the `CALLRX_API_URL` repo variable (not a
+//!    secret: the URL ends up in every published binary), so the production
+//!    endpoint is not hard-coded in the (public) source tree.
 //! 3. A `http://localhost:8073` fallback — the service's documented dev port.
 
 const FALLBACK_API_URL: &str = "http://localhost:8073";

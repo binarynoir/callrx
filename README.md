@@ -263,8 +263,9 @@ variable, falling back to the URL baked in at build time, and finally to
 For local development, copy `env-sample` to `.env` and point `CALLRX_API_URL`
 at your running service — `.env` is loaded automatically in debug builds
 (`cargo run`). Release binaries get their default endpoint from the
-`CALLRX_API_URL` GitHub Actions secret, baked in at compile time, so installed
-binaries work out of the box. The API key is handled separately (see
+`CALLRX_API_URL` GitHub Actions repo variable, baked in at compile time, so installed
+binaries work out of the box. It is a variable, not a secret: the URL ends up
+in every published binary anyway. The API key is handled separately (see
 [Authentication](#authentication) above) and, unlike the URL, is never baked
 into the binary — `callrx` is a publicly distributed binary, so a key is
 always either read from the environment (`CALLRX_API_KEY`) or loaded from the
@@ -339,9 +340,11 @@ Monitor the run at **Actions → Release**.
 >   with `repo` scope) that can push to `binarynoir/homebrew-callrx`. The
 >   `update-homebrew.yml` workflow uses it to commit the regenerated formula to
 >   the tap. The default `GITHUB_TOKEN` cannot write to another repository.
-> - Add a `CALLRX_API_URL` repo secret: the production callrx-service endpoint
->   (e.g. `https://api.example.com`). The **Release** workflow bakes it into the
->   binaries at compile time so installed copies point at the live service.
+> - Add a `CALLRX_API_URL` repo **variable** (Settings → Secrets and variables →
+>   Actions → Variables), not a secret: the production callrx-service origin,
+>   e.g. `https://api.example.com:8443`. The **Release** workflow bakes it into the
+>   binaries at compile time so installed copies point at the live service, and
+>   refuses to build unless it is a full `https://` origin with no path.
 
 ---
 

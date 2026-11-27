@@ -109,8 +109,10 @@ contract changes.
 1. `CALLRX_API_URL` env var at runtime (loaded from `.env` in debug builds by
    `dotenvy`, so `cargo run` targets the dev service);
 2. `CALLRX_API_URL` baked in at compile time via `option_env!` — the release
-   workflow supplies this from a GitHub secret so the production URL is not
-   committed to the public source tree (and reaches the ARM `cross` containers
+   workflow supplies this from the `CALLRX_API_URL` repo **variable** (not a
+   secret, since the URL ships in every binary; the workflow refuses to build
+   unless it is a full `https://` origin with no path), so the production URL is
+   not hard-coded in the public source tree (and reaches the ARM `cross` containers
    via `Cross.toml` passthrough);
 3. `http://localhost:8073` fallback (the service's documented dev port).
 
