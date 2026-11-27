@@ -188,6 +188,21 @@ jobs:
         if: matrix.use_cross == true
         run: cargo install cross --git https://github.com/cross-rs/cross
 
+      # CALLRX_API_URL is a public repo variable, not a secret: it ends up in
+      # every released binary anyway. An empty value would silently ship a
+      # binary that falls back to http://localhost:8073 (src/config.rs), and a
+      # bare hostname breaks every request, so refuse to build either.
+      - name: Check CALLRX_API_URL
+        shell: bash
+        env:
+          CALLRX_API_URL: ${{ vars.CALLRX_API_URL }}
+        run: |
+          if [[ ! "$CALLRX_API_URL" =~ ^https://[^/]+$ ]]; then
+            echo "::error::vars.CALLRX_API_URL must be a full https:// origin with no path (got '${CALLRX_API_URL}')"
+            exit 1
+          fi
+          echo "Building against $CALLRX_API_URL"
+
       # Build with cross (ARM) or native cargo (everything else).
       # CALLRX_API_URL is baked into the binary at compile time via option_env!.
       # For cross builds it reaches the build container via Cross.toml passthrough.
@@ -195,13 +210,13 @@ jobs:
         if: matrix.use_cross == true
         run: cross build --release --locked --target ${{ matrix.target }}
         env:
-          CALLRX_API_URL: ${{ secrets.CALLRX_API_URL }}
+          CALLRX_API_URL: ${{ vars.CALLRX_API_URL }}
 
       - name: Build (native)
         if: matrix.use_cross != true
         run: cargo build --release --locked --target ${{ matrix.target }}
         env:
-          CALLRX_API_URL: ${{ secrets.CALLRX_API_URL }}
+          CALLRX_API_URL: ${{ vars.CALLRX_API_URL }}
 
       # ── Package the binary ───────────────────────────────────────────────
 
