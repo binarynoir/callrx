@@ -221,7 +221,7 @@ the binary). Check on it any time with `callrx auth status`, or forget it
 with `callrx auth logout`.
 
 If you'd rather manage the key yourself — CI, automation, or a key created at
-[callrx.binarynoir.tech](https://callrx.binarynoir.tech) — set `CALLRX_API_KEY`
+[callrx.binarynoir.com](https://callrx.binarynoir.com) — set `CALLRX_API_KEY`
 instead; it always takes precedence over a saved `auth login` credential:
 
 ```bash
